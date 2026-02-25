@@ -1,0 +1,156 @@
+@layer base {
+	html,
+	body {
+		min-height: 100%;
+	}
+
+	body {
+		margin: 0;
+		min-height: 100dvh;
+	}
+
+	:root {
+		--app-shell-gradient: linear-gradient(
+			to bottom,
+			#ede9e5,
+			#dad3cd
+		);
+		--app-stage-gradient-start: #1e1e1e;
+		--app-stage-gradient-end: rgba(30, 30, 30, 0.8);
+		--app-stage-gradient-complete: #020202;
+	}
+
+	.font-manrope {
+		font-family: var(--font-manrope), sans-serif;
+	}
+
+	.font-inter {
+		font-family: var(--font-inter), sans-serif;
+	}
+
+	.font-roboto-mono {
+		font-family: var(--font-roboto-mono), monospace;
+	}
+
+	.font-pangolin {
+		font-family: var(--font-pangolin), cursive;
+	}
+}
+
+@layer components {
+	.app-shell {
+		@apply flex h-dvh min-h-screen min-h-dvh w-full flex-col items-center justify-center p-[24px] md:p-[48px];
+		background-image: var(--app-shell-gradient);
+	}
+
+	.app-stage {
+		@apply relative h-full w-full overflow-hidden rounded-[16px] transition-all duration-1000;
+	}
+
+	.app-stage-content {
+		@apply relative h-full w-full overflow-clip rounded-[inherit];
+	}
+
+	.app-stage-shadow {
+		@apply pointer-events-none absolute inset-0 rounded-[inherit] shadow-[inset_0px_-24px_24px_0px_rgba(0,0,0,0.4)];
+	}
+
+	.app-stage-border {
+		@apply pointer-events-none absolute inset-0 rounded-[16px] border-2 border-solid border-[rgba(0,0,0,0.5)];
+	}
+
+	.screen-root {
+		@apply flex size-full flex-col items-center justify-center gap-[10px] p-[24px];
+	}
+
+	.screen-root-relative {
+		@apply relative;
+	}
+
+	.screen-header {
+		@apply flex w-full items-center justify-between text-[16px] font-medium leading-[normal];
+		font-family: var(--font-manrope), sans-serif;
+	}
+
+	.screen-header-date {
+		@apply text-[rgba(255,255,255,0.4)];
+	}
+
+	.screen-header-time {
+		@apply text-[rgba(255,255,255,0.6)];
+	}
+
+	.screen-content-rail {
+		@apply flex w-full flex-1 flex-col items-center justify-center;
+	}
+
+	.screen-content-rail-lower {
+		@apply justify-end pb-[256px];
+	}
+
+	.screen-content-grid {
+		@apply flex w-[896px] max-w-full flex-col items-center justify-center;
+	}
+
+	.screen-content-grid-start {
+		@apply flex w-[896px] max-w-full flex-col items-start justify-center gap-[32px];
+	}
+
+	.screen-content-column {
+		@apply flex w-[384px] max-w-full flex-col items-start gap-[32px];
+	}
+
+	.screen-action-row {
+		@apply flex w-full justify-start;
+	}
+
+	.screen-action-inline {
+		@apply self-start;
+	}
+
+	.screen-prompt-block {
+		@apply w-[384px] max-w-full;
+	}
+
+	.action-outline {
+		@apply relative flex cursor-pointer items-center justify-center gap-[8px] rounded-[3px] px-[16px] py-[8px] transition-colors hover:bg-[rgba(255,255,255,0.05)];
+	}
+
+	.action-solid {
+		@apply relative flex cursor-pointer items-center justify-center gap-[8px] rounded-[3px] bg-[rgba(255,255,255,0.9)] px-[16px] py-[8px] transition-colors hover:bg-white;
+	}
+
+	.action-border {
+		@apply pointer-events-none absolute inset-0 rounded-[3px] border border-solid border-[rgba(255,255,255,0.2)];
+	}
+
+	.action-label-light {
+		@apply text-[16px] font-normal leading-[normal] text-white;
+		font-family: var(--font-inter), sans-serif;
+	}
+
+	.action-label-dark {
+		@apply text-[16px] font-normal leading-[normal] text-black;
+		font-family: var(--font-inter), sans-serif;
+	}
+
+	.dock-shell {
+		@apply relative flex items-center justify-center rounded-[20px] shadow-[0px_100px_106px_0px_rgba(0,0,0,0.05),0px_42px_44px_0px_rgba(0,0,0,0.04),0px_22px_24px_0px_rgba(0,0,0,0.03),0px_12px_12px_0px_rgba(0,0,0,0.03),0px_0px_0px_0px_rgba(0,0,0,0.08)];
+	}
+
+	.dock-glass {
+		@apply relative flex items-center justify-center rounded-[16px] bg-[rgba(235,235,235,0.3)] p-[4px] backdrop-blur-[20px];
+	}
+
+	.dock-glass-border {
+		@apply pointer-events-none absolute inset-0 rounded-[16px] border border-solid border-[rgba(255,255,255,0.5)];
+	}
+
+	.dock-icon-frame {
+		@apply relative flex size-[40px] items-center justify-center rounded-[12px];
+	}
+
+	.dock-icon-core {
+		@apply relative size-[32px] shadow-[0px_0px_2px_0px_rgba(0,0,0,0.15),0px_16px_40px_0px_rgba(0,0,0,0.08)];
+	}
+}
