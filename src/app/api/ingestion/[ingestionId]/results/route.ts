@@ -1,7 +1,7 @@
 import { GetObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
 import { getIngestionBucket, getS3Client } from "@/lib/aws/clients";
-import { getManifest } from "@/lib/ingestion/manifest";
+import { deriveStatusFromFiles, getManifest, withDerivedFileStatuses } from "@/lib/ingestion/manifest";
 import { buildEntriesPrefix } from "@/lib/ingestion/s3-keys";
 import type { ExtractedEntry, IngestionStatus } from "@/lib/ingestion/types";
 import { isValidClientId, isValidIngestionId } from "@/lib/ingestion/validation";
@@ -100,9 +100,14 @@ export async function GET(
       return NextResponse.json({ error: "Ingestion not found." }, { status: 404 });
     }
 
-    if (!TERMINAL_STATUSES.includes(manifest.status)) {
+    const { files: normalizedFiles } = withDerivedFileStatuses(manifest.files);
+    const effectiveStatus = TERMINAL_STATUSES.includes(manifest.status)
+      ? manifest.status
+      : deriveStatusFromFiles(normalizedFiles);
+
+    if (!TERMINAL_STATUSES.includes(effectiveStatus)) {
       return NextResponse.json(
-        { error: "Ingestion has not reached a terminal status.", status: manifest.status },
+        { error: "Ingestion has not reached a terminal status.", status: effectiveStatus },
         { status: 409 },
       );
     }

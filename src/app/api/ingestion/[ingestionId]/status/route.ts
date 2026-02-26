@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
-import { computeTotals, deriveStatusFromFiles, getManifest, putManifest, withManifestTimestamp } from "@/lib/ingestion/manifest";
+import {
+  computeTotals,
+  deriveStatusFromFiles,
+  getManifest,
+  putManifest,
+  withDerivedFileStatuses,
+  withManifestTimestamp,
+} from "@/lib/ingestion/manifest";
 import { isValidClientId, isValidIngestionId } from "@/lib/ingestion/validation";
 
 export const runtime = "nodejs";
@@ -24,17 +31,21 @@ export async function GET(
       return NextResponse.json({ error: "Ingestion not found." }, { status: 404 });
     }
 
-    const derivedStatus = deriveStatusFromFiles(manifest.files);
+    const { files: normalizedFiles, changed: fileStatusesChanged } = withDerivedFileStatuses(
+      manifest.files,
+    );
+    const derivedStatus = deriveStatusFromFiles(normalizedFiles);
     const status =
       manifest.status === "COMPLETED" || manifest.status === "PARTIAL_FAILED" || manifest.status === "FAILED"
         ? manifest.status
         : derivedStatus;
 
     let responseManifest = manifest;
-    if (status !== manifest.status) {
+    if (status !== manifest.status || fileStatusesChanged) {
       responseManifest = withManifestTimestamp({
         ...manifest,
         status,
+        files: normalizedFiles,
       });
       await putManifest(responseManifest);
     }

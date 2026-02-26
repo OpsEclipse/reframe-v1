@@ -2,11 +2,14 @@ import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { getIngestionBucket, getS3Client } from "@/lib/aws/clients";
 import { buildManifestKey } from "@/lib/ingestion/s3-keys";
 import type {
+  IngestionFileStatus,
   IngestionFileRecord,
   IngestionManifest,
   IngestionStatus,
   IngestionTotals,
 } from "@/lib/ingestion/types";
+
+const FILE_STATUSES = new Set<IngestionFileStatus>(["QUEUED", "PROCESSING", "COMPLETED", "FAILED"]);
 
 function isNotFoundError(error: unknown): boolean {
   if (!error || typeof error !== "object") {
@@ -62,10 +65,11 @@ export function deriveStatusFromFiles(files: IngestionFileRecord[]): IngestionSt
   let failed = 0;
 
   for (const file of files) {
-    if (file.status === "QUEUED") queued += 1;
-    if (file.status === "PROCESSING") processing += 1;
-    if (file.status === "COMPLETED") completed += 1;
-    if (file.status === "FAILED") failed += 1;
+    const effectiveStatus = deriveFileStatus(file);
+    if (effectiveStatus === "QUEUED") queued += 1;
+    if (effectiveStatus === "PROCESSING") processing += 1;
+    if (effectiveStatus === "COMPLETED") completed += 1;
+    if (effectiveStatus === "FAILED") failed += 1;
   }
 
   if (processing > 0) return "PROCESSING";
@@ -75,14 +79,80 @@ export function deriveStatusFromFiles(files: IngestionFileRecord[]): IngestionSt
   return queued === files.length ? "QUEUED" : "PROCESSING";
 }
 
+function normalizeFileStatus(value: unknown): IngestionFileStatus | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+  const normalized = value.toUpperCase();
+  return FILE_STATUSES.has(normalized as IngestionFileStatus)
+    ? (normalized as IngestionFileStatus)
+    : null;
+}
+
+export function deriveFileStatus(file: IngestionFileRecord): IngestionFileStatus {
+  const explicitStatus = normalizeFileStatus(file.status);
+
+  if (file.entryKey) {
+    return "COMPLETED";
+  }
+
+  if (explicitStatus === "COMPLETED" || explicitStatus === "FAILED") {
+    return explicitStatus;
+  }
+
+  if (typeof file.errorMessage === "string" && file.errorMessage.trim().length > 0) {
+    return "FAILED";
+  }
+
+  if (file.textractJobId || file.sourceFinalKey) {
+    return "PROCESSING";
+  }
+
+  if (explicitStatus) {
+    return explicitStatus;
+  }
+
+  return "QUEUED";
+}
+
+export function withDerivedFileStatuses(files: IngestionFileRecord[]): {
+  files: IngestionFileRecord[];
+  changed: boolean;
+} {
+  let changed = false;
+  const normalizedFiles = files.map((file) => {
+    const nextStatus = deriveFileStatus(file);
+    if (file.status !== nextStatus) {
+      changed = true;
+      return {
+        ...file,
+        status: nextStatus,
+      };
+    }
+    return file;
+  });
+
+  return { files: normalizedFiles, changed };
+}
+
 export function computeTotals(files: IngestionFileRecord[]): IngestionTotals {
-  return {
+  const totals = {
     total: files.length,
-    queued: files.filter((file) => file.status === "QUEUED").length,
-    processing: files.filter((file) => file.status === "PROCESSING").length,
-    completed: files.filter((file) => file.status === "COMPLETED").length,
-    failed: files.filter((file) => file.status === "FAILED").length,
+    queued: 0,
+    processing: 0,
+    completed: 0,
+    failed: 0,
   };
+
+  for (const file of files) {
+    const effectiveStatus = deriveFileStatus(file);
+    if (effectiveStatus === "QUEUED") totals.queued += 1;
+    if (effectiveStatus === "PROCESSING") totals.processing += 1;
+    if (effectiveStatus === "COMPLETED") totals.completed += 1;
+    if (effectiveStatus === "FAILED") totals.failed += 1;
+  }
+
+  return totals;
 }
 
 export function createInitialManifest(params: {
