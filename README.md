@@ -26,11 +26,22 @@ This project is migrated from a Vite React prototype to a Next.js App Router app
 
 ## API scaffold
 
-The backend is intentionally minimal for now:
-
 - `GET /api/health` returns a basic health payload.
 - `GET /api/veap` returns `501 Not Implemented`.
 - `POST /api/veap` returns `501 Not Implemented`.
+- `POST /api/ingestion/presign` returns pre-signed S3 upload URLs for journal files.
+- `POST /api/ingestion/submit` writes manifest state and asynchronously invokes the Starter Lambda.
+- `GET /api/ingestion/[ingestionId]/status` returns manifest-backed ingestion progress.
+- `GET /api/ingestion/[ingestionId]/results` returns extracted journal entries when terminal.
+
+Required env vars for ingestion:
+
+- `AWS_REGION`
+- `AWS_INGESTION_BUCKET`
+- `AWS_STARTER_LAMBDA_NAME`
+- `AWS_ACCESS_KEY_ID`
+- `AWS_SECRET_ACCESS_KEY`
+- `AWS_SESSION_TOKEN` (optional for temporary credentials)
 
 ## Vercel deployment
 
