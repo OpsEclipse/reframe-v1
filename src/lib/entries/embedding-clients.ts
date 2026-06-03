@@ -65,17 +65,37 @@ export async function createOpenAIEmbedding(text: string): Promise<number[]> {
 export async function upsertPineconeVector(
   vector: PineconeVectorUpsert,
 ): Promise<void> {
-  const index = getPineconeClient().index(getRequiredEnv("PINECONE_INDEX_NAME"));
+  const indexName = getRequiredEnv("PINECONE_INDEX_NAME");
+  const index = getPineconeClient().index(indexName);
+  const logDetails = {
+    indexName,
+    namespace: vector.namespace,
+    vectorId: vector.id,
+    entryId: vector.metadata.entry_id,
+    dimensions: vector.values.length,
+  };
 
-  await index.namespace(vector.namespace).upsert({
-    records: [
-      {
-        id: vector.id,
-        values: vector.values,
-        metadata: vector.metadata,
-      },
-    ],
-  });
+  console.log("[entry-embeddings] pinecone upsert starting", logDetails);
+
+  try {
+    await index.namespace(vector.namespace).upsert({
+      records: [
+        {
+          id: vector.id,
+          values: vector.values,
+          metadata: vector.metadata,
+        },
+      ],
+    });
+  } catch (error) {
+    console.error("[entry-embeddings] pinecone upsert failed", {
+      ...logDetails,
+      message: error instanceof Error ? error.message : "Unknown Pinecone error.",
+    });
+    throw error;
+  }
+
+  console.log("[entry-embeddings] pinecone upsert completed", logDetails);
 }
 
 export function buildEntryEmbeddingUpdatePayload(

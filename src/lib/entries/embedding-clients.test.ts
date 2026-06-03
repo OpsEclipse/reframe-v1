@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { afterAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { PineconeEntryMetadata } from "@/lib/entries/embedding-index";
 
 const clientMocks = vi.hoisted(() => {
@@ -79,6 +79,10 @@ afterAll(() => {
   process.env = originalEnv;
 });
 
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
 describe("createOpenAIEmbedding", () => {
   it("sends the expected OpenAI embedding request", async () => {
     setBaseEnv();
@@ -119,6 +123,7 @@ describe("upsertPineconeVector", () => {
   it("sends the expected namespaced Pinecone upsert payload", async () => {
     setBaseEnv();
     clientMocks.pineconeUpsert.mockResolvedValue(undefined);
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const { upsertPineconeVector } = await importEmbeddingClients();
 
     await upsertPineconeVector({
@@ -142,6 +147,68 @@ describe("upsertPineconeVector", () => {
         },
       ],
     });
+    expect(consoleLog).toHaveBeenCalledWith(
+      "[entry-embeddings] pinecone upsert starting",
+      {
+        indexName: "entries-index",
+        namespace: "user:user-123",
+        vectorId: "entry:entry-abc",
+        entryId: "entry-abc",
+        dimensions: 3,
+      },
+    );
+    expect(consoleLog).toHaveBeenCalledWith(
+      "[entry-embeddings] pinecone upsert completed",
+      {
+        indexName: "entries-index",
+        namespace: "user:user-123",
+        vectorId: "entry:entry-abc",
+        entryId: "entry-abc",
+        dimensions: 3,
+      },
+    );
+  });
+
+  it("logs Pinecone upsert failures before rethrowing", async () => {
+    setBaseEnv();
+    const pineconeError = new Error("index not found");
+    clientMocks.pineconeUpsert.mockRejectedValue(pineconeError);
+    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    const consoleError = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const { upsertPineconeVector } = await importEmbeddingClients();
+
+    await expect(
+      upsertPineconeVector({
+        namespace: "user:user-123",
+        id: "entry:entry-abc",
+        values: [0.1, 0.2, 0.3],
+        metadata: createMetadata(),
+      }),
+    ).rejects.toBe(pineconeError);
+
+    expect(consoleLog).toHaveBeenCalledWith(
+      "[entry-embeddings] pinecone upsert starting",
+      {
+        indexName: "entries-index",
+        namespace: "user:user-123",
+        vectorId: "entry:entry-abc",
+        entryId: "entry-abc",
+        dimensions: 3,
+      },
+    );
+    expect(consoleError).toHaveBeenCalledWith(
+      "[entry-embeddings] pinecone upsert failed",
+      {
+        indexName: "entries-index",
+        namespace: "user:user-123",
+        vectorId: "entry:entry-abc",
+        entryId: "entry-abc",
+        dimensions: 3,
+        message: "index not found",
+      },
+    );
   });
 });
 
