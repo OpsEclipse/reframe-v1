@@ -84,7 +84,7 @@ The server should select a small candidate set first.
 Candidate rules:
 
 1. Only use entries owned by the current user.
-2. Prefer entries with `embedding_status = 'indexed'`.
+2. Only use entries with `embedding_status = 'indexed'`.
 3. Exclude entries with empty content.
 4. Sample up to 3 candidate entries.
 
@@ -92,19 +92,23 @@ Then the model chooses one primary entry from that candidate set.
 
 This gives the experience some taste. It is like handing a friend three old letters and asking which one feels alive today.
 
-If fewer than 3 indexed entries exist, fill the candidate set with any stored entries that have S3 content.
+If fewer than 3 indexed entries exist, use however many indexed entries exist.
 
-If no stored entries exist, the server should return a useful empty state.
+If no indexed entries exist, the server should return a useful empty state that says Reflect needs indexed entries first.
 
 ## Related Entry Search
 
 After the primary entry is chosen:
 
-1. Embed [turn text into a numeric meaning map] the primary entry text.
-2. Search Pinecone in the user's namespace.
+1. Read the primary entry's saved `pinecone_vector_id`.
+2. Search Pinecone in the user's namespace using that vector ID.
 3. Exclude the primary entry.
 4. Return the top 4 to 8 related entries.
 5. Hydrate [load the full content for] those entries from S3.
+
+This should not call OpenAI embeddings again for the primary entry.
+
+The entry was already embedded during ingestion. The saved Pinecone vector is the reusable meaning fingerprint.
 
 If Pinecone search is unavailable, continue with the primary entry only.
 
