@@ -33,6 +33,7 @@ export interface IngestionTotals {
 export interface IngestionManifest {
   version: 1;
   ingestionId: string;
+  userId: string;
   clientId: string;
   status: IngestionStatus;
   submittedAt: string;
@@ -42,6 +43,7 @@ export interface IngestionManifest {
 
 export interface StarterInvokePayload {
   ingestionId: string;
+  userId: string;
   clientId: string;
   bucket: string;
   manifestKey: string;

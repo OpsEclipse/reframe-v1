@@ -157,6 +157,7 @@ export function computeTotals(files: IngestionFileRecord[]): IngestionTotals {
 
 export function createInitialManifest(params: {
   ingestionId: string;
+  userId: string;
   clientId: string;
   files: Array<{
     clientFileId: string;
@@ -171,6 +172,7 @@ export function createInitialManifest(params: {
   return {
     version: 1,
     ingestionId: params.ingestionId,
+    userId: params.userId,
     clientId: params.clientId,
     status: "QUEUED",
     submittedAt: now,
@@ -191,12 +193,12 @@ export function createInitialManifest(params: {
 }
 
 export async function getManifest(
-  clientId: string,
+  userId: string,
   ingestionId: string,
 ): Promise<IngestionManifest | null> {
   const s3 = getS3Client();
   const bucket = getIngestionBucket();
-  const key = buildManifestKey(clientId, ingestionId);
+  const key = buildManifestKey(userId, ingestionId);
 
   try {
     const response = await s3.send(
@@ -211,7 +213,22 @@ export async function getManifest(
       return null;
     }
 
-    return JSON.parse(payload) as IngestionManifest;
+    const parsed = JSON.parse(payload) as Partial<IngestionManifest>;
+    if (!parsed || typeof parsed !== "object") {
+      return null;
+    }
+
+    return {
+      ...parsed,
+      version: 1,
+      ingestionId: parsed.ingestionId ?? ingestionId,
+      userId: parsed.userId ?? userId,
+      clientId: parsed.clientId ?? "",
+      status: parsed.status ?? "QUEUED",
+      submittedAt: parsed.submittedAt ?? new Date().toISOString(),
+      updatedAt: parsed.updatedAt ?? new Date().toISOString(),
+      files: Array.isArray(parsed.files) ? parsed.files : [],
+    } as IngestionManifest;
   } catch (error) {
     if (isNotFoundError(error)) {
       return null;
@@ -223,7 +240,7 @@ export async function getManifest(
 export async function putManifest(manifest: IngestionManifest): Promise<void> {
   const s3 = getS3Client();
   const bucket = getIngestionBucket();
-  const key = buildManifestKey(manifest.clientId, manifest.ingestionId);
+  const key = buildManifestKey(manifest.userId, manifest.ingestionId);
 
   await s3.send(
     new PutObjectCommand({

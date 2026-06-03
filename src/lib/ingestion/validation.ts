@@ -11,10 +11,6 @@ export interface IngestionFileInput {
   key?: string;
 }
 
-export function isValidClientId(clientId: string): boolean {
-  return UUID_REGEX.test(clientId);
-}
-
 export function isValidIngestionId(ingestionId: string): boolean {
   return UUID_REGEX.test(ingestionId);
 }

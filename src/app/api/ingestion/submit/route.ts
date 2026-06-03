@@ -1,6 +1,7 @@
 import { InvokeCommand } from "@aws-sdk/client-lambda";
 import { NextRequest, NextResponse } from "next/server";
 import { getIngestionBucket, getLambdaClient, getStarterLambdaName } from "@/lib/aws/clients";
+import { getIngestionActor } from "@/lib/ingestion/auth";
 import {
   createInitialManifest,
   getManifest,
@@ -10,7 +11,7 @@ import {
 import { buildManifestKey, isOwnedTempKey } from "@/lib/ingestion/s3-keys";
 import type { IngestionManifest, StarterInvokePayload } from "@/lib/ingestion/types";
 import type { IngestionFileInput } from "@/lib/ingestion/validation";
-import { isValidClientId, isValidIngestionId, validateFiles } from "@/lib/ingestion/validation";
+import { isValidIngestionId, validateFiles } from "@/lib/ingestion/validation";
 
 interface SubmitFile extends IngestionFileInput {
   key: string;
@@ -52,10 +53,12 @@ async function markStarterEnqueueFailure(manifest: IngestionManifest) {
 
 export async function POST(request: NextRequest) {
   try {
-    const clientId = request.headers.get("x-client-id")?.trim();
-    if (!clientId || !isValidClientId(clientId)) {
-      return NextResponse.json({ error: "Invalid x-client-id header." }, { status: 400 });
+    const actor = await getIngestionActor();
+    if (!actor) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
+    const userId = actor.user.id;
+    const clientId = actor.clientId;
 
     const body = (await request.json()) as SubmitRequestBody;
     const ingestionId = body?.ingestionId;
@@ -84,7 +87,7 @@ export async function POST(request: NextRequest) {
       }
       seenClientFileIds.add(file.clientFileId);
 
-      if (!isOwnedTempKey(file.key, clientId, ingestionId)) {
+      if (!isOwnedTempKey(file.key, userId, ingestionId)) {
         return NextResponse.json(
           { error: `Invalid file key ownership for ${file.clientFileId}.` },
           { status: 400 },
@@ -92,7 +95,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const existingManifest = await getManifest(clientId, ingestionId);
+    const existingManifest = await getManifest(userId, ingestionId);
     const shouldRetryStarterEnqueue =
       existingManifest &&
       existingManifest.status === "FAILED" &&
@@ -117,15 +120,16 @@ export async function POST(request: NextRequest) {
               errorMessage: null,
             })),
           })
-        : createInitialManifest({ ingestionId, clientId, files });
+        : createInitialManifest({ ingestionId, userId, clientId, files });
 
     await putManifest(manifest);
 
     const payload: StarterInvokePayload = {
       ingestionId,
+      userId,
       clientId,
       bucket: getIngestionBucket(),
-      manifestKey: buildManifestKey(clientId, ingestionId),
+      manifestKey: buildManifestKey(userId, ingestionId),
       files: manifest.files.map((file) => ({
         clientFileId: file.clientFileId,
         key: file.key,

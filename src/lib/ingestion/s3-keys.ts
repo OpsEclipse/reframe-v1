@@ -5,40 +5,40 @@ export function sanitizeFileName(fileName: string): string {
   return normalized.length > 0 ? normalized : "upload";
 }
 
-export function buildTempPrefix(clientId: string, ingestionId: string): string {
-  return `temp/${clientId}/${ingestionId}`;
+export function buildTempPrefix(userId: string, ingestionId: string): string {
+  return `uploads/${userId}/${ingestionId}`;
 }
 
-export function buildProcessingSourcePrefix(clientId: string, ingestionId: string): string {
-  return `processing/${clientId}/${ingestionId}/source`;
+export function buildProcessingSourcePrefix(userId: string): string {
+  return `sources/${userId}/`;
 }
 
-export function buildFinalPrefix(clientId: string, ingestionId: string): string {
-  return `final/${clientId}/${ingestionId}`;
+export function buildManifestPrefix(userId: string, ingestionId: string): string {
+  return `ingestions/${userId}/${ingestionId}`;
 }
 
 export function buildTempObjectKey(
-  clientId: string,
+  userId: string,
   ingestionId: string,
   clientFileId: string,
   fileName: string,
 ): string {
-  return `${buildTempPrefix(clientId, ingestionId)}/${clientFileId}-${sanitizeFileName(fileName)}`;
+  return `${buildTempPrefix(userId, ingestionId)}/${clientFileId}-${sanitizeFileName(fileName)}`;
 }
 
-export function buildManifestKey(clientId: string, ingestionId: string): string {
-  return `${buildFinalPrefix(clientId, ingestionId)}/manifest.json`;
+export function buildManifestKey(userId: string, ingestionId: string): string {
+  return `${buildManifestPrefix(userId, ingestionId)}/manifest.json`;
 }
 
-export function buildEntriesPrefix(clientId: string, ingestionId: string): string {
-  return `${buildFinalPrefix(clientId, ingestionId)}/entries/`;
+export function buildEntriesPrefix(userId: string): string {
+  return `entries/${userId}/`;
 }
 
 export function buildJobMappingKey(textractJobId: string): string {
   return `processing/jobs/${textractJobId}.json`;
 }
 
-export function isOwnedTempKey(key: string, clientId: string, ingestionId: string): boolean {
-  const expectedPrefix = `${buildTempPrefix(clientId, ingestionId)}/`;
+export function isOwnedTempKey(key: string, userId: string, ingestionId: string): boolean {
+  const expectedPrefix = `${buildTempPrefix(userId, ingestionId)}/`;
   return key.startsWith(expectedPrefix) && !key.includes("../") && !key.includes("..\\");
 }

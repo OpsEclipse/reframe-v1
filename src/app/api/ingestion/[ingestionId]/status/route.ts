@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getIngestionActor } from "@/lib/ingestion/auth";
 import {
   computeTotals,
   deriveStatusFromFiles,
@@ -7,18 +8,18 @@ import {
   withDerivedFileStatuses,
   withManifestTimestamp,
 } from "@/lib/ingestion/manifest";
-import { isValidClientId, isValidIngestionId } from "@/lib/ingestion/validation";
+import { isValidIngestionId } from "@/lib/ingestion/validation";
 
 export const runtime = "nodejs";
 
 export async function GET(
-  request: NextRequest,
+  _request: NextRequest,
   context: { params: Promise<{ ingestionId: string }> },
 ) {
   try {
-    const clientId = request.headers.get("x-client-id")?.trim();
-    if (!clientId || !isValidClientId(clientId)) {
-      return NextResponse.json({ error: "Invalid x-client-id header." }, { status: 400 });
+    const actor = await getIngestionActor();
+    if (!actor) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
 
     const { ingestionId } = await context.params;
@@ -26,8 +27,12 @@ export async function GET(
       return NextResponse.json({ error: "Invalid ingestionId." }, { status: 400 });
     }
 
-    const manifest = await getManifest(clientId, ingestionId);
+    const manifest = await getManifest(actor.user.id, ingestionId);
     if (!manifest) {
+      return NextResponse.json({ error: "Ingestion not found." }, { status: 404 });
+    }
+
+    if (manifest.userId !== actor.user.id) {
       return NextResponse.json({ error: "Ingestion not found." }, { status: 404 });
     }
 

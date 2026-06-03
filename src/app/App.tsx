@@ -7,7 +7,6 @@ import {
 	type ReactNode,
 } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { LoginScreen } from './components/LoginScreen';
 import { GreetingScreen } from './components/GreetingScreen';
 import { GratitudeScreen } from './components/GratitudeScreen';
 import { ActivityScreen } from './components/ActivityScreen';
@@ -19,7 +18,6 @@ import { CompletedWritingScreen } from './components/CompletedWritingScreen';
 import { PostReflectionActivityScreen } from './components/PostReflectionActivityScreen';
 
 type Screen =
-	| 'login'
 	| 'greeting'
 	| 'gratitude'
 	| 'activity'
@@ -38,7 +36,6 @@ type Screen =
 type PostActivityDisabledOption = 'reflect' | 'write' | 'both';
 
 const SCREEN_WRAPPER_CLASS: Record<Screen, string> = {
-	login: 'size-full',
 	greeting: 'size-full',
 	gratitude: 'size-full',
 	activity: 'size-full',
@@ -82,9 +79,8 @@ function getCurrentTime(now: Date): string {
 	});
 }
 
-export default function App() {
-	const [screen, setScreen] = useState<Screen>('login');
-	const [userName] = useState('Raghav');
+export default function App({ userName }: { userName: string }) {
+	const [screen, setScreen] = useState<Screen>('greeting');
 	const [writtenText, setWrittenText] = useState('');
 	const [{ greeting, currentDate, currentTime }] = useState(() => {
 		const now = new Date();
@@ -100,8 +96,6 @@ export default function App() {
 	] = useState<PostActivityDisabledOption>('reflect');
 	const [, setCompletedCount] = useState(0);
 
-	// --- Navigation handlers ---
-	const handleLogin = useCallback(() => setScreen('greeting'), []);
 	const handleGratitudeComplete = useCallback(
 		() => setScreen('activity'),
 		[],
@@ -212,9 +206,6 @@ export default function App() {
 	let screenNode: ReactNode;
 
 	switch (screen) {
-		case 'login':
-			screenNode = <LoginScreen onLogin={handleLogin} />;
-			break;
 		case 'greeting':
 			screenNode = (
 				<GreetingScreen

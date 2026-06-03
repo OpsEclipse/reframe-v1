@@ -122,7 +122,6 @@ export function EnterActionButton({
   );
 }
 
-const CLIENT_ID_STORAGE_KEY = 'veap_anonymous_client_id';
 const POLL_INTERVAL_MS = 3000;
 const TERMINAL_STATUSES: IngestionStatus[] = ['COMPLETED', 'PARTIAL_FAILED', 'FAILED'];
 const MODAL_RIGHT_OFFSET_PX = 24;
@@ -232,17 +231,6 @@ function normalizeContentType(file: File): string {
   return 'application/octet-stream';
 }
 
-function getOrCreateClientId(): string {
-  const stored = window.localStorage.getItem(CLIENT_ID_STORAGE_KEY);
-  if (stored) {
-    return stored;
-  }
-
-  const created = crypto.randomUUID();
-  window.localStorage.setItem(CLIENT_ID_STORAGE_KEY, created);
-  return created;
-}
-
 function isTerminalStatus(status: IngestionStatus | null): boolean {
   if (!status) {
     return false;
@@ -270,7 +258,6 @@ function ImporterPopup({
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pollInFlightRef = useRef(false);
   const uploadInFlightRef = useRef(false);
-  const clientIdRef = useRef<string | null>(null);
   const popupRef = useRef<HTMLDivElement>(null);
   const dragControls = useDragControls();
 
@@ -296,13 +283,6 @@ function ImporterPopup({
   const maxFiles = getMaxFiles();
   const maxFileMb = getMaxFileMb();
 
-  const getClientId = useCallback(() => {
-    if (!clientIdRef.current) {
-      clientIdRef.current = getOrCreateClientId();
-    }
-    return clientIdRef.current;
-  }, []);
-
   const stopPolling = useCallback(() => {
     if (pollIntervalRef.current) {
       clearInterval(pollIntervalRef.current);
@@ -326,11 +306,7 @@ function ImporterPopup({
 
   const fetchResults = useCallback(
     async (targetIngestionId: string) => {
-      const response = await fetch(`/api/ingestion/${targetIngestionId}/results`, {
-        headers: {
-          'x-client-id': getClientId(),
-        },
-      });
+      const response = await fetch(`/api/ingestion/${targetIngestionId}/results`);
 
       if (response.status === 409) {
         return;
@@ -344,7 +320,7 @@ function ImporterPopup({
       const successPayload = payload as ResultsResponse;
       setResultCount(Array.isArray(successPayload.entries) ? successPayload.entries.length : 0);
     },
-    [getClientId],
+    [],
   );
 
   const pollStatus = useCallback(
@@ -356,11 +332,7 @@ function ImporterPopup({
       pollInFlightRef.current = true;
 
       try {
-        const response = await fetch(`/api/ingestion/${targetIngestionId}/status`, {
-          headers: {
-            'x-client-id': getClientId(),
-          },
-        });
+        const response = await fetch(`/api/ingestion/${targetIngestionId}/status`);
 
         const payload = (await response.json()) as StatusResponse | { error?: string };
         if (!response.ok) {
@@ -393,7 +365,7 @@ function ImporterPopup({
         pollInFlightRef.current = false;
       }
     },
-    [fetchResults, getClientId, stopPolling],
+    [fetchResults, stopPolling],
   );
 
   const startPolling = useCallback(
@@ -516,7 +488,6 @@ function ImporterPopup({
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'x-client-id': getClientId(),
           },
           body: JSON.stringify({
             files: localFiles.map((file) => ({
@@ -633,7 +604,7 @@ function ImporterPopup({
         uploadInFlightRef.current = false;
       }
     },
-    [getClientId, maxFileMb, maxFiles, stopPolling],
+    [maxFileMb, maxFiles, stopPolling],
   );
 
   const handleInputFiles = useCallback(
@@ -684,7 +655,6 @@ function ImporterPopup({
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'x-client-id': getClientId(),
         },
         body: JSON.stringify({
           ingestionId,
@@ -718,7 +688,7 @@ function ImporterPopup({
     } finally {
       setIsSubmitting(false);
     }
-  }, [files, getClientId, ingestionId, startPolling]);
+  }, [files, ingestionId, startPolling]);
 
   const handleRetryUploads = useCallback(() => {
     const retryFiles = files.map((file) => file.file);

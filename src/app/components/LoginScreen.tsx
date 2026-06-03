@@ -45,10 +45,16 @@ function GoogleLogo() {
 }
 
 interface LoginScreenProps {
-  onLogin: () => void;
+  onContinueWithGoogle: () => void;
+  onSignUp: () => void;
+  onLogIn: () => void;
 }
 
-export function LoginScreen({ onLogin }: LoginScreenProps) {
+export function LoginScreen({
+  onContinueWithGoogle,
+  onSignUp,
+  onLogIn,
+}: LoginScreenProps) {
   return (
     <FadeScreen className="content-stretch">
       <div className="flex flex-col gap-[48px] items-center">
@@ -62,7 +68,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
 
         <div className="flex flex-col gap-[12px] w-[384px]">
           <button
-            onClick={onLogin}
+            onClick={onContinueWithGoogle}
             className="bg-white rounded-[2px] w-full flex items-center justify-center gap-[12px] p-[16px] cursor-pointer hover:bg-gray-100 transition-colors"
           >
             <GoogleLogo />
@@ -70,13 +76,13 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           </button>
           <div className="flex gap-[8px] w-full">
             <button
-              onClick={onLogin}
+              onClick={onSignUp}
               className="flex-1 bg-[rgba(255,255,255,0.1)] rounded-[2px] p-[16px] cursor-pointer hover:bg-[rgba(255,255,255,0.15)] transition-colors"
             >
               <span className="font-manrope font-semibold text-[20px] text-[rgba(255,255,255,0.9)] tracking-[-0.4px]">Sign up</span>
             </button>
             <button
-              onClick={onLogin}
+              onClick={onLogIn}
               className="flex-1 bg-[rgba(255,255,255,0.1)] rounded-[2px] p-[16px] cursor-pointer hover:bg-[rgba(255,255,255,0.15)] transition-colors"
             >
               <span className="font-manrope font-semibold text-[20px] text-[rgba(255,255,255,0.9)] tracking-[-0.4px]">Log in</span>
