@@ -8,6 +8,7 @@ import {
   type EntryEmbeddingDependencies,
   type EntryEmbeddingRecord,
   type EntryEmbeddingStatusUpdate,
+  type PineconeVectorUpsert,
   indexEntryEmbedding,
 } from "@/lib/entries/embedding-index";
 
@@ -26,21 +27,17 @@ function createRecord(): EntryEmbeddingRecord {
 function createDependencies(
   overrides: Partial<EntryEmbeddingDependencies> = {},
 ) {
+  const createEmbeddingInputs: string[] = [];
   const statusUpdates: EntryEmbeddingStatusUpdate[] = [];
-  const upserts: Array<{
-    namespace: string;
-    id: string;
-    values: number[];
-  }> = [];
+  const upserts: PineconeVectorUpsert[] = [];
 
   const dependencies: EntryEmbeddingDependencies = {
-    createEmbedding: async () => [0.1, 0.2, 0.3],
+    createEmbedding: async (text) => {
+      createEmbeddingInputs.push(text);
+      return [0.1, 0.2, 0.3];
+    },
     upsertVector: async (vector) => {
-      upserts.push({
-        namespace: vector.namespace,
-        id: vector.id,
-        values: vector.values,
-      });
+      upserts.push(vector);
     },
     markEntryEmbeddingStatus: async (update) => {
       statusUpdates.push(update);
@@ -50,7 +47,7 @@ function createDependencies(
     ...overrides,
   };
 
-  return { dependencies, statusUpdates, upserts };
+  return { createEmbeddingInputs, dependencies, statusUpdates, upserts };
 }
 
 describe("entry embedding helpers", () => {
@@ -114,19 +111,30 @@ describe("entry embedding helpers", () => {
 
 describe("indexEntryEmbedding", () => {
   it("creates an embedding, upserts it, and marks the entry indexed", async () => {
-    const { dependencies, statusUpdates, upserts } = createDependencies();
+    const record = createRecord();
+    const { createEmbeddingInputs, dependencies, statusUpdates, upserts } =
+      createDependencies();
 
-    const result = await indexEntryEmbedding(dependencies, createRecord());
+    const result = await indexEntryEmbedding(dependencies, record);
 
     expect(result).toEqual({
       status: "indexed",
       vectorId: "entry:entry-abc",
     });
+    expect(createEmbeddingInputs).toEqual([record.entryText]);
     expect(upserts).toEqual([
       {
         namespace: "user:user-123",
         id: "entry:entry-abc",
         values: [0.1, 0.2, 0.3],
+        metadata: {
+          user_id: "user-123",
+          client_id: "client-456",
+          entry_id: "entry-abc",
+          s3_key: "entries/user-123/file.json",
+          source_file: "journal.pdf",
+          entry_date: "2025-02-01",
+        },
       },
     ]);
     expect(statusUpdates).toEqual([
@@ -146,18 +154,22 @@ describe("indexEntryEmbedding", () => {
   });
 
   it("marks the entry failed when embedding creation fails", async () => {
+    const record = createRecord();
+    const createEmbeddingInputs: string[] = [];
     const { dependencies, statusUpdates, upserts } = createDependencies({
-      createEmbedding: async () => {
+      createEmbedding: async (text) => {
+        createEmbeddingInputs.push(text);
         throw new Error("OpenAI unavailable");
       },
     });
 
-    const result = await indexEntryEmbedding(dependencies, createRecord());
+    const result = await indexEntryEmbedding(dependencies, record);
 
     expect(result).toEqual({
       status: "failed",
       vectorId: "entry:entry-abc",
     });
+    expect(createEmbeddingInputs).toEqual([record.entryText]);
     expect(upserts).toEqual([]);
     expect(statusUpdates).toEqual([
       {
@@ -174,18 +186,21 @@ describe("indexEntryEmbedding", () => {
   });
 
   it("marks the entry failed when vector upsert fails", async () => {
-    const { dependencies, statusUpdates } = createDependencies({
-      upsertVector: async () => {
-        throw new Error("Pinecone unavailable");
-      },
-    });
+    const record = createRecord();
+    const { createEmbeddingInputs, dependencies, statusUpdates } =
+      createDependencies({
+        upsertVector: async () => {
+          throw new Error("Pinecone unavailable");
+        },
+      });
 
-    const result = await indexEntryEmbedding(dependencies, createRecord());
+    const result = await indexEntryEmbedding(dependencies, record);
 
     expect(result).toEqual({
       status: "failed",
       vectorId: "entry:entry-abc",
     });
+    expect(createEmbeddingInputs).toEqual([record.entryText]);
     expect(statusUpdates).toEqual([
       {
         userId: "user-123",
@@ -196,6 +211,38 @@ describe("indexEntryEmbedding", () => {
         userId: "user-123",
         entryId: "entry-abc",
         status: "failed",
+      },
+    ]);
+  });
+
+  it("throws when the indexed status update fails after a successful upsert", async () => {
+    const indexedStatusError = new Error("Supabase unavailable");
+    const { dependencies, statusUpdates, upserts } = createDependencies();
+    dependencies.markEntryEmbeddingStatus = async (update) => {
+      statusUpdates.push(update);
+
+      if (update.status === "indexed") {
+        throw indexedStatusError;
+      }
+    };
+
+    await expect(indexEntryEmbedding(dependencies, createRecord())).rejects.toBe(
+      indexedStatusError,
+    );
+
+    expect(upserts).toHaveLength(1);
+    expect(statusUpdates).toEqual([
+      {
+        userId: "user-123",
+        entryId: "entry-abc",
+        status: "pending",
+      },
+      {
+        userId: "user-123",
+        entryId: "entry-abc",
+        status: "indexed",
+        pineconeVectorId: "entry:entry-abc",
+        embeddedAt: "2026-06-03T12:00:00.000Z",
       },
     ]);
   });

@@ -92,6 +92,7 @@ export async function indexEntryEmbedding(
   record: EntryEmbeddingRecord,
 ): Promise<EntryEmbeddingResult> {
   const vectorId = buildPineconeVectorId(record.entryId);
+  let values: number[];
 
   await dependencies.markEntryEmbeddingStatus({
     userId: record.userId,
@@ -100,7 +101,7 @@ export async function indexEntryEmbedding(
   });
 
   try {
-    const values = await dependencies.createEmbedding(record.entryText);
+    values = await dependencies.createEmbedding(record.entryText);
     await dependencies.upsertVector({
       namespace: buildPineconeNamespace(
         record.userId,
@@ -110,19 +111,6 @@ export async function indexEntryEmbedding(
       values,
       metadata: buildPineconeMetadata(record),
     });
-
-    await dependencies.markEntryEmbeddingStatus({
-      userId: record.userId,
-      entryId: record.entryId,
-      status: "indexed",
-      pineconeVectorId: vectorId,
-      embeddedAt: dependencies.now().toISOString(),
-    });
-
-    return {
-      status: "indexed",
-      vectorId,
-    };
   } catch {
     await dependencies.markEntryEmbeddingStatus({
       userId: record.userId,
@@ -135,6 +123,19 @@ export async function indexEntryEmbedding(
       vectorId,
     };
   }
+
+  await dependencies.markEntryEmbeddingStatus({
+    userId: record.userId,
+    entryId: record.entryId,
+    status: "indexed",
+    pineconeVectorId: vectorId,
+    embeddedAt: dependencies.now().toISOString(),
+  });
+
+  return {
+    status: "indexed",
+    vectorId,
+  };
 }
 
 export async function indexEntryEmbeddings(
