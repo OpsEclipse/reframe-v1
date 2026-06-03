@@ -26,8 +26,7 @@ const SUPABASE_PROJECT_REF = (() => {
 
 export const runtime = "nodejs";
 
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-interface SyncedEntryReference extends EntryEmbeddingRecord {}
+type SyncedEntryReference = EntryEmbeddingRecord;
 
 function isValidEntryKey(key: string): boolean {
   return FLAT_ENTRY_KEY_PATTERN.test(key) || LEGACY_ENTRY_KEY_PATTERN.test(key);
