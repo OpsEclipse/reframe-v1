@@ -43,7 +43,7 @@ Required env vars for ingestion:
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_SESSION_TOKEN` (optional for temporary credentials)
 
-Required env vars for entry embedding indexing:
+Server-only env vars for entry embedding indexing:
 
 - `OPENAI_API_KEY`
 - `PINECONE_API_KEY`
