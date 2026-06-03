@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { buildEntryEmbeddingUpdatePayload } from "@/lib/entries/embedding-clients";
 import {
   buildPineconeMetadata,
   buildPineconeNamespace,
@@ -245,5 +246,37 @@ describe("indexEntryEmbedding", () => {
         embeddedAt: "2026-06-03T12:00:00.000Z",
       },
     ]);
+  });
+});
+
+describe("buildEntryEmbeddingUpdatePayload", () => {
+  it("builds an indexed Supabase update payload", () => {
+    expect(
+      buildEntryEmbeddingUpdatePayload({
+        userId: "user-123",
+        entryId: "entry-abc",
+        status: "indexed",
+        pineconeVectorId: "entry:entry-abc",
+        embeddedAt: "2026-06-03T12:00:00.000Z",
+      }),
+    ).toEqual({
+      embedding_status: "indexed",
+      pinecone_vector_id: "entry:entry-abc",
+      embedded_at: "2026-06-03T12:00:00.000Z",
+    });
+  });
+
+  it("builds a failed Supabase update payload that clears indexed fields", () => {
+    expect(
+      buildEntryEmbeddingUpdatePayload({
+        userId: "user-123",
+        entryId: "entry-abc",
+        status: "failed",
+      }),
+    ).toEqual({
+      embedding_status: "failed",
+      pinecone_vector_id: null,
+      embedded_at: null,
+    });
   });
 });
