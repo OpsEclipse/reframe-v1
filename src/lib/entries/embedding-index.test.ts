@@ -437,7 +437,6 @@ describe("buildEntryEmbeddingUpdatePayload", () => {
     ).toEqual({
       embedding_status: "failed",
       pinecone_vector_id: null,
-      embedded_at: null,
     });
   });
 });

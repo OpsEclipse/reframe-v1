@@ -244,6 +244,61 @@ describe("markSupabaseEntryEmbeddingStatus", () => {
     expect(select).toHaveBeenCalledWith("entry_id");
   });
 
+  it("retries indexed status updates without embedded_at when Supabase schema cache is stale", async () => {
+    const staleSchemaError = {
+      message:
+        "Could not find the 'embedded_at' column of 'entries' in the schema cache",
+    };
+    const firstSelect = vi.fn(async () => ({
+      data: null,
+      error: staleSchemaError,
+    }));
+    const secondSelect = vi.fn(async () => ({
+      data: [{ entry_id: "entry-abc" }],
+      error: null,
+    }));
+    const firstEqEntryId = vi.fn(() => ({ select: firstSelect }));
+    const secondEqEntryId = vi.fn(() => ({ select: secondSelect }));
+    const firstEqUserId = vi.fn(() => ({ eq: firstEqEntryId }));
+    const secondEqUserId = vi.fn(() => ({ eq: secondEqEntryId }));
+    const update = vi
+      .fn()
+      .mockReturnValueOnce({ eq: firstEqUserId })
+      .mockReturnValueOnce({ eq: secondEqUserId });
+    const from = vi.fn(() => ({ update }));
+    const consoleWarn = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    const supabase = { from } as unknown as SupabaseClient;
+    const { markSupabaseEntryEmbeddingStatus } = await importEmbeddingClients();
+
+    await markSupabaseEntryEmbeddingStatus(supabase, {
+      userId: "user-123",
+      entryId: "entry-abc",
+      status: "indexed",
+      pineconeVectorId: "entry:entry-abc",
+      embeddedAt: "2026-06-03T12:00:00.000Z",
+    });
+
+    expect(update).toHaveBeenNthCalledWith(1, {
+      embedding_status: "indexed",
+      pinecone_vector_id: "entry:entry-abc",
+      embedded_at: "2026-06-03T12:00:00.000Z",
+    });
+    expect(update).toHaveBeenNthCalledWith(2, {
+      embedding_status: "indexed",
+      pinecone_vector_id: "entry:entry-abc",
+    });
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "[entry-embeddings] retrying status update without embedded_at",
+      {
+        entryId: "entry-abc",
+        message:
+          "Could not find the 'embedded_at' column of 'entries' in the schema cache",
+      },
+    );
+  });
+
   it("throws when no entry row is updated", async () => {
     const select = vi.fn(async () => ({
       data: [],

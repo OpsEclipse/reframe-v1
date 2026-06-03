@@ -102,8 +102,8 @@ export function buildEntryEmbeddingUpdatePayload(
   update: EntryEmbeddingStatusUpdate,
 ): {
   embedding_status: EntryEmbeddingStatusUpdate["status"];
-  pinecone_vector_id: string | null;
-  embedded_at: string | null;
+  pinecone_vector_id?: string | null;
+  embedded_at?: string | null;
 } {
   if (update.status === "indexed") {
     return {
@@ -116,20 +116,54 @@ export function buildEntryEmbeddingUpdatePayload(
   return {
     embedding_status: update.status,
     pinecone_vector_id: null,
-    embedded_at: null,
   };
+}
+
+function omitEmbeddedAt<T extends { embedded_at?: string | null }>(
+  payload: T,
+): Omit<T, "embedded_at"> {
+  const fallbackPayload = { ...payload };
+  delete fallbackPayload.embedded_at;
+  return fallbackPayload;
+}
+
+function isMissingEmbeddedAtSchemaCacheError(error: {
+  message?: string;
+} | null): boolean {
+  return Boolean(
+    error?.message.includes("embedded_at") &&
+      error.message.includes("schema cache"),
+  );
 }
 
 export async function markSupabaseEntryEmbeddingStatus(
   supabase: SupabaseClient,
   update: EntryEmbeddingStatusUpdate,
 ): Promise<void> {
-  const { data, error } = await supabase
+  const payload = buildEntryEmbeddingUpdatePayload(update);
+  let { data, error } = await supabase
     .from("entries")
-    .update(buildEntryEmbeddingUpdatePayload(update))
+    .update(payload)
     .eq("user_id", update.userId)
     .eq("entry_id", update.entryId)
     .select("entry_id");
+
+  if (isMissingEmbeddedAtSchemaCacheError(error) && update.status === "indexed") {
+    console.warn("[entry-embeddings] retrying status update without embedded_at", {
+      entryId: update.entryId,
+      message: error?.message,
+    });
+
+    const fallbackResult = await supabase
+      .from("entries")
+      .update(omitEmbeddedAt(payload))
+      .eq("user_id", update.userId)
+      .eq("entry_id", update.entryId)
+      .select("entry_id");
+
+    data = fallbackResult.data;
+    error = fallbackResult.error;
+  }
 
   if (error) {
     throw new Error(`Failed to update embedding status: ${error.message}`, {
