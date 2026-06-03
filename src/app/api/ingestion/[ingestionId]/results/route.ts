@@ -2,6 +2,8 @@ import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { getIngestionBucket, getS3Client } from "@/lib/aws/clients";
+import { indexEntriesWithDefaultClients } from "@/lib/entries/embedding-clients";
+import type { EntryEmbeddingRecord } from "@/lib/entries/embedding-index";
 import { getIngestionActor, type IngestionActor } from "@/lib/ingestion/auth";
 import { deriveStatusFromFiles, getManifest, withDerivedFileStatuses } from "@/lib/ingestion/manifest";
 import type { ExtractedEntry, IngestionStatus } from "@/lib/ingestion/types";
@@ -23,6 +25,9 @@ const SUPABASE_PROJECT_REF = (() => {
 })();
 
 export const runtime = "nodejs";
+
+// eslint-disable-next-line @typescript-eslint/no-empty-object-type
+interface SyncedEntryReference extends EntryEmbeddingRecord {}
 
 function isValidEntryKey(key: string): boolean {
   return FLAT_ENTRY_KEY_PATTERN.test(key) || LEGACY_ENTRY_KEY_PATTERN.test(key);
@@ -180,7 +185,7 @@ async function syncEntriesToDatabase(params: {
   userId: string;
   clientId: string;
   entryObjects: Array<{ key: string; entry: ExtractedEntry }>;
-}): Promise<number> {
+}): Promise<SyncedEntryReference[]> {
   const rows: Array<{
     user_id: string;
     client_id: string;
@@ -189,6 +194,7 @@ async function syncEntriesToDatabase(params: {
     source_file: string | null;
     entry_date: string | null;
   }> = [];
+  const syncedReferences: SyncedEntryReference[] = [];
 
   const seenEntryIds = new Set<string>();
 
@@ -208,13 +214,24 @@ async function syncEntriesToDatabase(params: {
     }
     seenEntryIds.add(entryId);
 
+    const entryDate = normalizeEntryDate(item.entry.date);
+
     rows.push({
       user_id: params.userId,
       client_id: params.clientId,
       entry_id: entryId,
       s3_key: item.key,
       source_file: item.entry.source_file || null,
-      entry_date: normalizeEntryDate(item.entry.date),
+      entry_date: entryDate,
+    });
+    syncedReferences.push({
+      userId: params.userId,
+      clientId: params.clientId,
+      entryId,
+      s3Key: item.key,
+      sourceFile: item.entry.source_file || null,
+      entryDate,
+      entryText: item.entry.entry_text,
     });
   }
 
@@ -225,7 +242,7 @@ async function syncEntriesToDatabase(params: {
         entriesByKeyCount: params.entryObjects.length,
       });
     }
-    return 0;
+    return [];
   }
 
   if (INGESTION_DEBUG) {
@@ -244,7 +261,7 @@ async function syncEntriesToDatabase(params: {
   });
 
   if (!error) {
-    return rows.length;
+    return syncedReferences;
   }
 
   const sampleKeys = rows
@@ -410,10 +427,28 @@ export async function GET(
       entryObjects: materializedEntryObjects,
     });
 
+    let embeddingResults: Awaited<ReturnType<typeof indexEntriesWithDefaultClients>> = [];
+    try {
+      embeddingResults = await indexEntriesWithDefaultClients({
+        supabase: actor.supabase,
+        records: syncedReferences,
+      });
+    } catch (indexingError) {
+      if (INGESTION_DEBUG) {
+        console.error("[ingestion-results] embedding indexing failed", {
+          ingestionId,
+          userId: actor.user.id,
+          message: indexingError instanceof Error ? indexingError.message : "Unknown indexing error.",
+        });
+      }
+    }
+
     return NextResponse.json({
       ingestionId,
       entries,
-      referencesSynced: syncedReferences,
+      referencesSynced: syncedReferences.length,
+      embeddingsIndexed: embeddingResults.filter((result) => result.status === "indexed").length,
+      embeddingsFailed: embeddingResults.filter((result) => result.status === "failed").length,
       entryKeys: materializedEntryObjects.map((item) => item.key),
     });
   } catch (error) {
