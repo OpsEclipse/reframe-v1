@@ -2,6 +2,7 @@ import { Pinecone } from "@pinecone-database/pinecone";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import {
+  EMBEDDING_DIMENSIONS,
   EMBEDDING_MODEL,
   indexEntryEmbeddings,
   type EntryEmbeddingRecord,
@@ -46,11 +47,29 @@ export function getPineconeNamespacePrefix(): string {
   return process.env.PINECONE_NAMESPACE_PREFIX || "user";
 }
 
+export function getOpenAIEmbeddingDimensions(): number {
+  const rawValue = process.env.OPENAI_EMBEDDING_DIMENSIONS;
+  if (!rawValue) {
+    return EMBEDDING_DIMENSIONS;
+  }
+
+  const dimensions = Number.parseInt(rawValue, 10);
+  if (!Number.isInteger(dimensions) || dimensions <= 0) {
+    throw new Error(
+      "OPENAI_EMBEDDING_DIMENSIONS must be a positive integer.",
+    );
+  }
+
+  return dimensions;
+}
+
 export async function createOpenAIEmbedding(text: string): Promise<number[]> {
+  const dimensions = getOpenAIEmbeddingDimensions();
   const response = await getOpenAIClient().embeddings.create({
     model: EMBEDDING_MODEL,
     input: text,
     encoding_format: "float",
+    dimensions,
   });
 
   const embedding = response.data[0]?.embedding;

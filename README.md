@@ -48,6 +48,7 @@ Server-only env vars for entry embedding indexing:
 - `OPENAI_API_KEY`
 - `PINECONE_API_KEY`
 - `PINECONE_INDEX_NAME`
+- `OPENAI_EMBEDDING_DIMENSIONS` (optional, defaults to `512`; must match the Pinecone index dimension)
 - `PINECONE_NAMESPACE_PREFIX` (optional, defaults to `user`)
 
 ## Vercel deployment

@@ -58,7 +58,7 @@ function createDependencies(
 describe("entry embedding helpers", () => {
   it("uses the approved OpenAI embedding model and dimensions", () => {
     expect(EMBEDDING_MODEL).toBe("text-embedding-3-small");
-    expect(EMBEDDING_DIMENSIONS).toBe(1536);
+    expect(EMBEDDING_DIMENSIONS).toBe(512);
   });
 
   it("builds a user namespace with the default prefix", () => {

@@ -1,5 +1,5 @@
 export const EMBEDDING_MODEL = "text-embedding-3-small";
-export const EMBEDDING_DIMENSIONS = 1536;
+export const EMBEDDING_DIMENSIONS = 512;
 export const DEFAULT_PINECONE_NAMESPACE_PREFIX = "user";
 
 export type EntryEmbeddingStatus = "pending" | "indexed" | "failed";

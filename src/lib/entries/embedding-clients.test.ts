@@ -106,7 +106,41 @@ describe("createOpenAIEmbedding", () => {
       model: "text-embedding-3-small",
       input: "journal text",
       encoding_format: "float",
+      dimensions: 512,
     });
+  });
+
+  it("allows the embedding dimensions to be configured", async () => {
+    setBaseEnv();
+    process.env.OPENAI_EMBEDDING_DIMENSIONS = "1536";
+    clientMocks.openAIEmbeddingsCreate.mockResolvedValue({
+      data: [
+        {
+          embedding: [0.1, 0.2, 0.3],
+        },
+      ],
+    });
+    const { createOpenAIEmbedding } = await importEmbeddingClients();
+
+    await createOpenAIEmbedding("journal text");
+
+    expect(clientMocks.openAIEmbeddingsCreate).toHaveBeenCalledWith({
+      model: "text-embedding-3-small",
+      input: "journal text",
+      encoding_format: "float",
+      dimensions: 1536,
+    });
+  });
+
+  it("rejects invalid embedding dimensions", async () => {
+    setBaseEnv();
+    process.env.OPENAI_EMBEDDING_DIMENSIONS = "nope";
+    const { createOpenAIEmbedding } = await importEmbeddingClients();
+
+    await expect(createOpenAIEmbedding("journal text")).rejects.toThrow(
+      "OPENAI_EMBEDDING_DIMENSIONS must be a positive integer.",
+    );
+    expect(clientMocks.openAIEmbeddingsCreate).not.toHaveBeenCalled();
   });
 
   it("throws when the OpenAI API key is missing", async () => {
