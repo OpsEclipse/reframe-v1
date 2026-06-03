@@ -475,6 +475,17 @@ export async function GET(
       references: syncedReferences,
     });
 
+    console.log("[ingestion-results] embedding queue prepared", {
+      ingestionId,
+      userId: actor.user.id,
+      entriesReturned: entries.length,
+      referencesSynced: syncedReferences.length,
+      embeddingsQueued: referencesNeedingEmbedding.length,
+      entryIds: referencesNeedingEmbedding
+        .slice(0, 10)
+        .map((reference) => reference.entryId),
+    });
+
     scheduleEntryEmbeddingIndexing({
       supabase: actor.supabase,
       records: referencesNeedingEmbedding,
