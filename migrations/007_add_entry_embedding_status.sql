@@ -12,5 +12,8 @@ alter table public.entries
   add constraint entries_embedding_status_check
   check (embedding_status in ('pending', 'indexed', 'failed')) not valid;
 
+alter table public.entries
+  validate constraint entries_embedding_status_check;
+
 create index if not exists idx_entries_embedding_status
 on public.entries (user_id, embedding_status);
