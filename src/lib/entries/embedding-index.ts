@@ -14,7 +14,17 @@ export interface EntryEmbeddingRecord {
   entryText: string;
 }
 
+export interface EntryMetadataSource {
+  userId: string;
+  clientId: string;
+  entryId: string;
+  s3Key: string;
+  sourceFile: string | null;
+  entryDate: string | null;
+}
+
 export interface PineconeEntryMetadata {
+  [key: string]: string;
   user_id: string;
   client_id: string;
   entry_id: string;
@@ -35,7 +45,7 @@ export function buildPineconeVectorId(entryId: string): string {
 }
 
 export function buildPineconeMetadata(
-  record: EntryEmbeddingRecord,
+  record: EntryMetadataSource,
 ): PineconeEntryMetadata {
   return {
     user_id: record.userId,

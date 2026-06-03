@@ -33,7 +33,6 @@ describe("entry embedding helpers", () => {
       s3Key: "entries/user-123/file.json",
       sourceFile: "journal.pdf",
       entryDate: "2025-02-01",
-      entryText: "This text must not be stored in Pinecone metadata.",
     });
 
     expect(metadata).toEqual({
@@ -44,8 +43,25 @@ describe("entry embedding helpers", () => {
       source_file: "journal.pdf",
       entry_date: "2025-02-01",
     });
-    expect(Object.values(metadata)).not.toContain(
-      "This text must not be stored in Pinecone metadata.",
-    );
+  });
+
+  it("uses empty strings for nullable metadata fields", () => {
+    expect(
+      buildPineconeMetadata({
+        userId: "user-123",
+        clientId: "client-456",
+        entryId: "entry-abc",
+        s3Key: "entries/user-123/file.json",
+        sourceFile: null,
+        entryDate: null,
+      }),
+    ).toEqual({
+      user_id: "user-123",
+      client_id: "client-456",
+      entry_id: "entry-abc",
+      s3_key: "entries/user-123/file.json",
+      source_file: "",
+      entry_date: "",
+    });
   });
 });
