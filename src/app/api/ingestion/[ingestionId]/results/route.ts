@@ -482,7 +482,6 @@ export async function GET(
         ingestionId,
         userId: actor.user.id,
       },
-      logError: INGESTION_DEBUG ? console.error : () => undefined,
     });
 
     return NextResponse.json({
