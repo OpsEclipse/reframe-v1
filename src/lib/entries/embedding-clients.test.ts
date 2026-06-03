@@ -299,6 +299,44 @@ describe("markSupabaseEntryEmbeddingStatus", () => {
     );
   });
 
+  it("does not block indexing when embedding status columns are missing", async () => {
+    const missingStatusError = {
+      message:
+        "Could not find the 'embedding_status' column of 'entries' in the schema cache",
+    };
+    const select = vi.fn(async () => ({
+      data: null,
+      error: missingStatusError,
+    }));
+    const eqEntryId = vi.fn(() => ({ select }));
+    const eqUserId = vi.fn(() => ({ eq: eqEntryId }));
+    const update = vi.fn(() => ({ eq: eqUserId }));
+    const from = vi.fn(() => ({ update }));
+    const consoleWarn = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    const supabase = { from } as unknown as SupabaseClient;
+    const { markSupabaseEntryEmbeddingStatus } = await importEmbeddingClients();
+
+    await expect(
+      markSupabaseEntryEmbeddingStatus(supabase, {
+        userId: "user-123",
+        entryId: "entry-abc",
+        status: "pending",
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(consoleWarn).toHaveBeenCalledWith(
+      "[entry-embeddings] skipping embedding status update",
+      {
+        entryId: "entry-abc",
+        status: "pending",
+        message:
+          "Could not find the 'embedding_status' column of 'entries' in the schema cache",
+      },
+    );
+  });
+
   it("throws when no entry row is updated", async () => {
     const select = vi.fn(async () => ({
       data: [],

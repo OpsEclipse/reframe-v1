@@ -136,6 +136,17 @@ function isMissingEmbeddedAtSchemaCacheError(error: {
   );
 }
 
+function isMissingEntryEmbeddingSchemaCacheError(error: {
+  message?: string;
+} | null): boolean {
+  return Boolean(
+    error?.message.includes("schema cache") &&
+      (error.message.includes("embedding_status") ||
+        error.message.includes("pinecone_vector_id") ||
+        error.message.includes("embedded_at")),
+  );
+}
+
 export async function markSupabaseEntryEmbeddingStatus(
   supabase: SupabaseClient,
   update: EntryEmbeddingStatusUpdate,
@@ -163,6 +174,15 @@ export async function markSupabaseEntryEmbeddingStatus(
 
     data = fallbackResult.data;
     error = fallbackResult.error;
+  }
+
+  if (isMissingEntryEmbeddingSchemaCacheError(error)) {
+    console.warn("[entry-embeddings] skipping embedding status update", {
+      entryId: update.entryId,
+      status: update.status,
+      message: error?.message,
+    });
+    return;
   }
 
   if (error) {
