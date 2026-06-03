@@ -33,6 +33,36 @@ export interface PineconeEntryMetadata {
   entry_date: string;
 }
 
+export interface EntryEmbeddingStatusUpdate {
+  userId: string;
+  entryId: string;
+  status: EntryEmbeddingStatus;
+  pineconeVectorId?: string;
+  embeddedAt?: string;
+}
+
+export interface PineconeVectorUpsert {
+  namespace: string;
+  id: string;
+  values: number[];
+  metadata: PineconeEntryMetadata;
+}
+
+export interface EntryEmbeddingDependencies {
+  createEmbedding: (text: string) => Promise<number[]>;
+  upsertVector: (vector: PineconeVectorUpsert) => Promise<void>;
+  markEntryEmbeddingStatus: (
+    update: EntryEmbeddingStatusUpdate,
+  ) => Promise<void>;
+  now: () => Date;
+  namespacePrefix?: string;
+}
+
+export interface EntryEmbeddingResult {
+  status: EntryEmbeddingStatus;
+  vectorId: string;
+}
+
 export function buildPineconeNamespace(
   userId: string,
   prefix = DEFAULT_PINECONE_NAMESPACE_PREFIX,
@@ -55,4 +85,67 @@ export function buildPineconeMetadata(
     source_file: record.sourceFile ?? "",
     entry_date: record.entryDate ?? "",
   };
+}
+
+export async function indexEntryEmbedding(
+  dependencies: EntryEmbeddingDependencies,
+  record: EntryEmbeddingRecord,
+): Promise<EntryEmbeddingResult> {
+  const vectorId = buildPineconeVectorId(record.entryId);
+
+  await dependencies.markEntryEmbeddingStatus({
+    userId: record.userId,
+    entryId: record.entryId,
+    status: "pending",
+  });
+
+  try {
+    const values = await dependencies.createEmbedding(record.entryText);
+    await dependencies.upsertVector({
+      namespace: buildPineconeNamespace(
+        record.userId,
+        dependencies.namespacePrefix,
+      ),
+      id: vectorId,
+      values,
+      metadata: buildPineconeMetadata(record),
+    });
+
+    await dependencies.markEntryEmbeddingStatus({
+      userId: record.userId,
+      entryId: record.entryId,
+      status: "indexed",
+      pineconeVectorId: vectorId,
+      embeddedAt: dependencies.now().toISOString(),
+    });
+
+    return {
+      status: "indexed",
+      vectorId,
+    };
+  } catch {
+    await dependencies.markEntryEmbeddingStatus({
+      userId: record.userId,
+      entryId: record.entryId,
+      status: "failed",
+    });
+
+    return {
+      status: "failed",
+      vectorId,
+    };
+  }
+}
+
+export async function indexEntryEmbeddings(
+  dependencies: EntryEmbeddingDependencies,
+  records: EntryEmbeddingRecord[],
+): Promise<EntryEmbeddingResult[]> {
+  const results: EntryEmbeddingResult[] = [];
+
+  for (const record of records) {
+    results.push(await indexEntryEmbedding(dependencies, record));
+  }
+
+  return results;
 }
