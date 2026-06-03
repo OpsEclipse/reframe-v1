@@ -1,0 +1,48 @@
+export const EMBEDDING_MODEL = "text-embedding-3-small";
+export const EMBEDDING_DIMENSIONS = 1536;
+export const DEFAULT_PINECONE_NAMESPACE_PREFIX = "user";
+
+export type EntryEmbeddingStatus = "pending" | "indexed" | "failed";
+
+export interface EntryEmbeddingRecord {
+  userId: string;
+  clientId: string;
+  entryId: string;
+  s3Key: string;
+  sourceFile: string | null;
+  entryDate: string | null;
+  entryText: string;
+}
+
+export interface PineconeEntryMetadata {
+  user_id: string;
+  client_id: string;
+  entry_id: string;
+  s3_key: string;
+  source_file: string;
+  entry_date: string;
+}
+
+export function buildPineconeNamespace(
+  userId: string,
+  prefix = DEFAULT_PINECONE_NAMESPACE_PREFIX,
+): string {
+  return `${prefix}:${userId}`;
+}
+
+export function buildPineconeVectorId(entryId: string): string {
+  return `entry:${entryId}`;
+}
+
+export function buildPineconeMetadata(
+  record: EntryEmbeddingRecord,
+): PineconeEntryMetadata {
+  return {
+    user_id: record.userId,
+    client_id: record.clientId,
+    entry_id: record.entryId,
+    s3_key: record.s3Key,
+    source_file: record.sourceFile ?? "",
+    entry_date: record.entryDate ?? "",
+  };
+}
