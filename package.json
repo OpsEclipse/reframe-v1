@@ -2,6 +2,9 @@
   "name": "@figma/my-make-file",
   "private": true,
   "version": "0.0.1",
+  "engines": {
+    "node": "^20.19.0 || >=22.12.0"
+  },
   "scripts": {
     "dev": "next dev",
     "build": "CI=1 NEXT_TELEMETRY_DISABLED=1 next build",
