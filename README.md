@@ -43,6 +43,13 @@ Required env vars for ingestion:
 - `AWS_SECRET_ACCESS_KEY`
 - `AWS_SESSION_TOKEN` (optional for temporary credentials)
 
+Server-only env vars for entry embedding indexing:
+
+- `OPENAI_API_KEY`
+- `PINECONE_API_KEY`
+- `PINECONE_INDEX_NAME`
+- `PINECONE_NAMESPACE_PREFIX` (optional, defaults to `user`)
+
 ## Vercel deployment
 
 1. Push this repo to GitHub.

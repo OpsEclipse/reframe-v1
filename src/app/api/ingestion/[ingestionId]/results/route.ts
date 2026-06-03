@@ -2,6 +2,8 @@ import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { getIngestionBucket, getS3Client } from "@/lib/aws/clients";
+import { scheduleEntryEmbeddingIndexing } from "@/lib/entries/embedding-background";
+import type { EntryEmbeddingRecord } from "@/lib/entries/embedding-index";
 import { getIngestionActor, type IngestionActor } from "@/lib/ingestion/auth";
 import { deriveStatusFromFiles, getManifest, withDerivedFileStatuses } from "@/lib/ingestion/manifest";
 import type { ExtractedEntry, IngestionStatus } from "@/lib/ingestion/types";
@@ -23,6 +25,13 @@ const SUPABASE_PROJECT_REF = (() => {
 })();
 
 export const runtime = "nodejs";
+
+type SyncedEntryReference = EntryEmbeddingRecord;
+
+interface EntryEmbeddingStatusRow {
+  entry_id: string;
+  embedding_status: string;
+}
 
 function isValidEntryKey(key: string): boolean {
   return FLAT_ENTRY_KEY_PATTERN.test(key) || LEGACY_ENTRY_KEY_PATTERN.test(key);
@@ -180,7 +189,7 @@ async function syncEntriesToDatabase(params: {
   userId: string;
   clientId: string;
   entryObjects: Array<{ key: string; entry: ExtractedEntry }>;
-}): Promise<number> {
+}): Promise<SyncedEntryReference[]> {
   const rows: Array<{
     user_id: string;
     client_id: string;
@@ -189,6 +198,7 @@ async function syncEntriesToDatabase(params: {
     source_file: string | null;
     entry_date: string | null;
   }> = [];
+  const syncedReferences: SyncedEntryReference[] = [];
 
   const seenEntryIds = new Set<string>();
 
@@ -208,13 +218,24 @@ async function syncEntriesToDatabase(params: {
     }
     seenEntryIds.add(entryId);
 
+    const entryDate = normalizeEntryDate(item.entry.date);
+
     rows.push({
       user_id: params.userId,
       client_id: params.clientId,
       entry_id: entryId,
       s3_key: item.key,
       source_file: item.entry.source_file || null,
-      entry_date: normalizeEntryDate(item.entry.date),
+      entry_date: entryDate,
+    });
+    syncedReferences.push({
+      userId: params.userId,
+      clientId: params.clientId,
+      entryId,
+      s3Key: item.key,
+      sourceFile: item.entry.source_file || null,
+      entryDate,
+      entryText: item.entry.entry_text,
     });
   }
 
@@ -225,7 +246,7 @@ async function syncEntriesToDatabase(params: {
         entriesByKeyCount: params.entryObjects.length,
       });
     }
-    return 0;
+    return [];
   }
 
   if (INGESTION_DEBUG) {
@@ -244,7 +265,7 @@ async function syncEntriesToDatabase(params: {
   });
 
   if (!error) {
-    return rows.length;
+    return syncedReferences;
   }
 
   const sampleKeys = rows
@@ -266,6 +287,44 @@ async function syncEntriesToDatabase(params: {
 
   throw new Error(
     `Failed to store entry references: ${error.message}. Sample keys: ${sampleKeys}`,
+  );
+}
+
+async function getReferencesNeedingEmbedding(params: {
+  supabase: IngestionActor["supabase"];
+  userId: string;
+  references: SyncedEntryReference[];
+}): Promise<SyncedEntryReference[]> {
+  if (params.references.length === 0) {
+    return [];
+  }
+
+  const entryIds = params.references.map((reference) => reference.entryId);
+  const { data, error } = await params.supabase
+    .from("entries")
+    .select("entry_id, embedding_status")
+    .eq("user_id", params.userId)
+    .in("entry_id", entryIds);
+
+  if (error) {
+    if (INGESTION_DEBUG) {
+      console.error("[ingestion-results] embedding status lookup failed", {
+        userId: params.userId,
+        message: error.message,
+      });
+    }
+
+    return params.references;
+  }
+
+  const indexedEntryIds = new Set(
+    ((data ?? []) as EntryEmbeddingStatusRow[])
+      .filter((row) => row.embedding_status === "indexed")
+      .map((row) => row.entry_id),
+  );
+
+  return params.references.filter(
+    (reference) => !indexedEntryIds.has(reference.entryId),
   );
 }
 
@@ -410,10 +469,27 @@ export async function GET(
       entryObjects: materializedEntryObjects,
     });
 
+    const referencesNeedingEmbedding = await getReferencesNeedingEmbedding({
+      supabase: actor.supabase,
+      userId: actor.user.id,
+      references: syncedReferences,
+    });
+
+    scheduleEntryEmbeddingIndexing({
+      supabase: actor.supabase,
+      records: referencesNeedingEmbedding,
+      context: {
+        ingestionId,
+        userId: actor.user.id,
+      },
+      logError: INGESTION_DEBUG ? console.error : () => undefined,
+    });
+
     return NextResponse.json({
       ingestionId,
       entries,
-      referencesSynced: syncedReferences,
+      referencesSynced: syncedReferences.length,
+      embeddingsQueued: referencesNeedingEmbedding.length,
       entryKeys: materializedEntryObjects.map((item) => item.key),
     });
   } catch (error) {
