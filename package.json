@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "CI=1 NEXT_TELEMETRY_DISABLED=1 next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run"
   },
   "dependencies": {
     "@aws-sdk/client-lambda": "^3.997.0",
@@ -16,6 +17,7 @@
     "@emotion/styled": "11.14.1",
     "@mui/icons-material": "7.3.5",
     "@mui/material": "7.3.5",
+    "@pinecone-database/pinecone": "^7.2.0",
     "@popperjs/core": "2.11.8",
     "@radix-ui/react-accordion": "1.2.3",
     "@radix-ui/react-alert-dialog": "1.1.6",
@@ -55,6 +57,7 @@
     "motion": "12.23.24",
     "next": "^15.0.0",
     "next-themes": "0.4.6",
+    "openai": "^6.41.0",
     "react": "^19.2.4",
     "react-day-picker": "^9.11.1",
     "react-dnd": "16.0.1",
@@ -80,6 +83,7 @@
     "eslint": "^9.35.0",
     "eslint-config-next": "^15.5.4",
     "tailwindcss": "4.1.12",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.8"
   }
 }
