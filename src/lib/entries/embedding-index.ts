@@ -103,6 +103,11 @@ export async function indexEntryEmbedding(
   const vectorId = buildPineconeVectorId(record.entryId);
   let values: number[];
 
+  console.log("[entry-embeddings] marking entry embedding pending", {
+    entryId: record.entryId,
+    vectorId,
+  });
+
   await dependencies.markEntryEmbeddingStatus({
     userId: record.userId,
     entryId: record.entryId,
@@ -110,7 +115,18 @@ export async function indexEntryEmbedding(
   });
 
   try {
+    console.log("[entry-embeddings] creating OpenAI embedding", {
+      entryId: record.entryId,
+      vectorId,
+      textLength: record.entryText.length,
+    });
     values = await dependencies.createEmbedding(record.entryText);
+    console.log("[entry-embeddings] OpenAI embedding created", {
+      entryId: record.entryId,
+      vectorId,
+      dimensions: values.length,
+    });
+
     await dependencies.upsertVector({
       namespace: buildPineconeNamespace(
         record.userId,
@@ -120,7 +136,18 @@ export async function indexEntryEmbedding(
       values,
       metadata: buildPineconeMetadata(record),
     });
-  } catch {
+
+    console.log("[entry-embeddings] vector upsert finished", {
+      entryId: record.entryId,
+      vectorId,
+    });
+  } catch (error) {
+    console.error("[entry-embeddings] entry indexing failed", {
+      entryId: record.entryId,
+      vectorId,
+      message: error instanceof Error ? error.message : "Unknown indexing error.",
+    });
+
     await dependencies.markEntryEmbeddingStatus({
       userId: record.userId,
       entryId: record.entryId,
@@ -156,7 +183,13 @@ export async function indexEntryEmbeddings(
   for (const record of records) {
     try {
       results.push(await indexEntryEmbedding(dependencies, record));
-    } catch {
+    } catch (error) {
+      console.error("[entry-embeddings] entry indexing threw outside retry path", {
+        entryId: record.entryId,
+        vectorId: buildPineconeVectorId(record.entryId),
+        message: error instanceof Error ? error.message : "Unknown indexing error.",
+      });
+
       results.push({
         status: "failed",
         vectorId: buildPineconeVectorId(record.entryId),

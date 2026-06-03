@@ -43,7 +43,12 @@ export function scheduleEntryEmbeddingIndexing({
     });
 
     try {
-      await indexEntries({ supabase, records });
+      const results = await indexEntries({ supabase, records });
+      console.log("[entry-embeddings] background indexing completed", {
+        ...context,
+        indexed: results.filter((result) => result.status === "indexed").length,
+        failed: results.filter((result) => result.status === "failed").length,
+      });
     } catch (error) {
       logError("[entry-embeddings] background indexing failed", {
         ...context,
