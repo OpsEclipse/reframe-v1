@@ -11,9 +11,12 @@ import {
   type EntryEmbeddingStatusUpdate,
   type PineconeVectorUpsert,
   indexEntryEmbedding,
+  indexEntryEmbeddings,
 } from "@/lib/entries/embedding-index";
 
-function createRecord(): EntryEmbeddingRecord {
+function createRecord(
+  overrides: Partial<EntryEmbeddingRecord> = {},
+): EntryEmbeddingRecord {
   return {
     userId: "user-123",
     clientId: "client-456",
@@ -22,6 +25,7 @@ function createRecord(): EntryEmbeddingRecord {
     sourceFile: "journal.pdf",
     entryDate: "2025-02-01",
     entryText: "I felt hopeful after a hard week.",
+    ...overrides,
   };
 }
 
@@ -243,6 +247,163 @@ describe("indexEntryEmbedding", () => {
         entryId: "entry-abc",
         status: "indexed",
         pineconeVectorId: "entry:entry-abc",
+        embeddedAt: "2026-06-03T12:00:00.000Z",
+      },
+    ]);
+  });
+});
+
+describe("indexEntryEmbeddings", () => {
+  it("returns one result per record", async () => {
+    const records = [
+      createRecord({
+        entryId: "entry-one",
+        entryText: "First entry.",
+      }),
+      createRecord({
+        entryId: "entry-two",
+        entryText: "Second entry.",
+      }),
+    ];
+    const { createEmbeddingInputs, dependencies } = createDependencies();
+
+    const results = await indexEntryEmbeddings(dependencies, records);
+
+    expect(results).toEqual([
+      {
+        status: "indexed",
+        vectorId: "entry:entry-one",
+      },
+      {
+        status: "indexed",
+        vectorId: "entry:entry-two",
+      },
+    ]);
+    expect(createEmbeddingInputs).toEqual(["First entry.", "Second entry."]);
+  });
+
+  it("continues to later records when a status update throws", async () => {
+    const records = [
+      createRecord({
+        entryId: "entry-broken",
+        entryText: "Broken entry.",
+      }),
+      createRecord({
+        entryId: "entry-next",
+        entryText: "Next entry.",
+      }),
+    ];
+    const { createEmbeddingInputs, dependencies, statusUpdates } =
+      createDependencies();
+    dependencies.markEntryEmbeddingStatus = async (update) => {
+      statusUpdates.push(update);
+
+      if (update.entryId === "entry-broken" && update.status === "pending") {
+        throw new Error("Supabase unavailable");
+      }
+    };
+
+    const results = await indexEntryEmbeddings(dependencies, records);
+
+    expect(results).toEqual([
+      {
+        status: "failed",
+        vectorId: "entry:entry-broken",
+      },
+      {
+        status: "indexed",
+        vectorId: "entry:entry-next",
+      },
+    ]);
+    expect(createEmbeddingInputs).toEqual(["Next entry."]);
+    expect(statusUpdates).toEqual([
+      {
+        userId: "user-123",
+        entryId: "entry-broken",
+        status: "pending",
+      },
+      {
+        userId: "user-123",
+        entryId: "entry-next",
+        status: "pending",
+      },
+      {
+        userId: "user-123",
+        entryId: "entry-next",
+        status: "indexed",
+        pineconeVectorId: "entry:entry-next",
+        embeddedAt: "2026-06-03T12:00:00.000Z",
+      },
+    ]);
+  });
+
+  it("continues to later records when an indexing result throws", async () => {
+    const records = [
+      createRecord({
+        entryId: "entry-indexed-status-fails",
+        entryText: "This upsert succeeds.",
+      }),
+      createRecord({
+        entryId: "entry-after-throw",
+        entryText: "This should still run.",
+      }),
+    ];
+    const { createEmbeddingInputs, dependencies, statusUpdates, upserts } =
+      createDependencies();
+    dependencies.markEntryEmbeddingStatus = async (update) => {
+      statusUpdates.push(update);
+
+      if (
+        update.entryId === "entry-indexed-status-fails" &&
+        update.status === "indexed"
+      ) {
+        throw new Error("Supabase unavailable");
+      }
+    };
+
+    const results = await indexEntryEmbeddings(dependencies, records);
+
+    expect(results).toEqual([
+      {
+        status: "failed",
+        vectorId: "entry:entry-indexed-status-fails",
+      },
+      {
+        status: "indexed",
+        vectorId: "entry:entry-after-throw",
+      },
+    ]);
+    expect(createEmbeddingInputs).toEqual([
+      "This upsert succeeds.",
+      "This should still run.",
+    ]);
+    expect(upserts.map((upsert) => upsert.id)).toEqual([
+      "entry:entry-indexed-status-fails",
+      "entry:entry-after-throw",
+    ]);
+    expect(statusUpdates).toEqual([
+      {
+        userId: "user-123",
+        entryId: "entry-indexed-status-fails",
+        status: "pending",
+      },
+      {
+        userId: "user-123",
+        entryId: "entry-indexed-status-fails",
+        status: "indexed",
+        pineconeVectorId: "entry:entry-indexed-status-fails",
+        embeddedAt: "2026-06-03T12:00:00.000Z",
+      },
+      {
+        userId: "user-123",
+        entryId: "entry-after-throw",
+        status: "pending",
+      },
+      {
+        userId: "user-123",
+        entryId: "entry-after-throw",
+        status: "indexed",
+        pineconeVectorId: "entry:entry-after-throw",
         embeddedAt: "2026-06-03T12:00:00.000Z",
       },
     ]);

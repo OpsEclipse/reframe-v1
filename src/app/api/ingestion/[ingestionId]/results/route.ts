@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { getIngestionBucket, getS3Client } from "@/lib/aws/clients";
 import { indexEntriesWithDefaultClients } from "@/lib/entries/embedding-clients";
-import type { EntryEmbeddingRecord } from "@/lib/entries/embedding-index";
+import { buildPineconeVectorId, type EntryEmbeddingRecord } from "@/lib/entries/embedding-index";
 import { getIngestionActor, type IngestionActor } from "@/lib/ingestion/auth";
 import { deriveStatusFromFiles, getManifest, withDerivedFileStatuses } from "@/lib/ingestion/manifest";
 import type { ExtractedEntry, IngestionStatus } from "@/lib/ingestion/types";
@@ -433,6 +433,11 @@ export async function GET(
         records: syncedReferences,
       });
     } catch (indexingError) {
+      embeddingResults = syncedReferences.map((reference) => ({
+        status: "failed" as const,
+        vectorId: buildPineconeVectorId(reference.entryId),
+      }));
+
       if (INGESTION_DEBUG) {
         console.error("[ingestion-results] embedding indexing failed", {
           ingestionId,

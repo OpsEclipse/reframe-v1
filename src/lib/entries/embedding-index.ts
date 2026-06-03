@@ -154,7 +154,14 @@ export async function indexEntryEmbeddings(
   const results: EntryEmbeddingResult[] = [];
 
   for (const record of records) {
-    results.push(await indexEntryEmbedding(dependencies, record));
+    try {
+      results.push(await indexEntryEmbedding(dependencies, record));
+    } catch {
+      results.push({
+        status: "failed",
+        vectorId: buildPineconeVectorId(record.entryId),
+      });
+    }
   }
 
   return results;
