@@ -33,13 +33,22 @@ export interface PineconeEntryMetadata {
   entry_date: string;
 }
 
-export interface EntryEmbeddingStatusUpdate {
+interface EntryEmbeddingStatusUpdateBase {
   userId: string;
   entryId: string;
-  status: EntryEmbeddingStatus;
-  pineconeVectorId?: string;
-  embeddedAt?: string;
 }
+
+export type EntryEmbeddingStatusUpdate =
+  | (EntryEmbeddingStatusUpdateBase & {
+      status: "pending" | "failed";
+      pineconeVectorId?: never;
+      embeddedAt?: never;
+    })
+  | (EntryEmbeddingStatusUpdateBase & {
+      status: "indexed";
+      pineconeVectorId: string;
+      embeddedAt: string;
+    });
 
 export interface PineconeVectorUpsert {
   namespace: string;

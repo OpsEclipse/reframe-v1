@@ -88,8 +88,8 @@ export function buildEntryEmbeddingUpdatePayload(
   if (update.status === "indexed") {
     return {
       embedding_status: "indexed",
-      pinecone_vector_id: update.pineconeVectorId ?? null,
-      embedded_at: update.embeddedAt ?? null,
+      pinecone_vector_id: update.pineconeVectorId,
+      embedded_at: update.embeddedAt,
     };
   }
 
@@ -104,14 +104,23 @@ export async function markSupabaseEntryEmbeddingStatus(
   supabase: SupabaseClient,
   update: EntryEmbeddingStatusUpdate,
 ): Promise<void> {
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from("entries")
     .update(buildEntryEmbeddingUpdatePayload(update))
     .eq("user_id", update.userId)
-    .eq("entry_id", update.entryId);
+    .eq("entry_id", update.entryId)
+    .select("entry_id");
 
   if (error) {
-    throw new Error(`Failed to update embedding status: ${error.message}`);
+    throw new Error(`Failed to update embedding status: ${error.message}`, {
+      cause: error,
+    });
+  }
+
+  if (!data || data.length === 0) {
+    throw new Error(
+      `Failed to update embedding status: no entry matched ${update.entryId}.`,
+    );
   }
 }
 
