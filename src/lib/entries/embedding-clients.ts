@@ -140,3 +140,5 @@ export async function indexEntriesWithDefaultClients(params: {
     params.records,
   );
 }
+
+export type IndexEntriesWithDefaultClients = typeof indexEntriesWithDefaultClients;

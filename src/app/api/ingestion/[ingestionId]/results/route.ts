@@ -2,8 +2,8 @@ import { GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
 import { NextRequest, NextResponse } from "next/server";
 import { createHash } from "node:crypto";
 import { getIngestionBucket, getS3Client } from "@/lib/aws/clients";
-import { indexEntriesWithDefaultClients } from "@/lib/entries/embedding-clients";
-import { buildPineconeVectorId, type EntryEmbeddingRecord } from "@/lib/entries/embedding-index";
+import { scheduleEntryEmbeddingIndexing } from "@/lib/entries/embedding-background";
+import type { EntryEmbeddingRecord } from "@/lib/entries/embedding-index";
 import { getIngestionActor, type IngestionActor } from "@/lib/ingestion/auth";
 import { deriveStatusFromFiles, getManifest, withDerivedFileStatuses } from "@/lib/ingestion/manifest";
 import type { ExtractedEntry, IngestionStatus } from "@/lib/ingestion/types";
@@ -27,6 +27,11 @@ const SUPABASE_PROJECT_REF = (() => {
 export const runtime = "nodejs";
 
 type SyncedEntryReference = EntryEmbeddingRecord;
+
+interface EntryEmbeddingStatusRow {
+  entry_id: string;
+  embedding_status: string;
+}
 
 function isValidEntryKey(key: string): boolean {
   return FLAT_ENTRY_KEY_PATTERN.test(key) || LEGACY_ENTRY_KEY_PATTERN.test(key);
@@ -285,6 +290,44 @@ async function syncEntriesToDatabase(params: {
   );
 }
 
+async function getReferencesNeedingEmbedding(params: {
+  supabase: IngestionActor["supabase"];
+  userId: string;
+  references: SyncedEntryReference[];
+}): Promise<SyncedEntryReference[]> {
+  if (params.references.length === 0) {
+    return [];
+  }
+
+  const entryIds = params.references.map((reference) => reference.entryId);
+  const { data, error } = await params.supabase
+    .from("entries")
+    .select("entry_id, embedding_status")
+    .eq("user_id", params.userId)
+    .in("entry_id", entryIds);
+
+  if (error) {
+    if (INGESTION_DEBUG) {
+      console.error("[ingestion-results] embedding status lookup failed", {
+        userId: params.userId,
+        message: error.message,
+      });
+    }
+
+    return params.references;
+  }
+
+  const indexedEntryIds = new Set(
+    ((data ?? []) as EntryEmbeddingStatusRow[])
+      .filter((row) => row.embedding_status === "indexed")
+      .map((row) => row.entry_id),
+  );
+
+  return params.references.filter(
+    (reference) => !indexedEntryIds.has(reference.entryId),
+  );
+}
+
 export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ ingestionId: string }> },
@@ -426,33 +469,27 @@ export async function GET(
       entryObjects: materializedEntryObjects,
     });
 
-    let embeddingResults: Awaited<ReturnType<typeof indexEntriesWithDefaultClients>> = [];
-    try {
-      embeddingResults = await indexEntriesWithDefaultClients({
-        supabase: actor.supabase,
-        records: syncedReferences,
-      });
-    } catch (indexingError) {
-      embeddingResults = syncedReferences.map((reference) => ({
-        status: "failed" as const,
-        vectorId: buildPineconeVectorId(reference.entryId),
-      }));
+    const referencesNeedingEmbedding = await getReferencesNeedingEmbedding({
+      supabase: actor.supabase,
+      userId: actor.user.id,
+      references: syncedReferences,
+    });
 
-      if (INGESTION_DEBUG) {
-        console.error("[ingestion-results] embedding indexing failed", {
-          ingestionId,
-          userId: actor.user.id,
-          message: indexingError instanceof Error ? indexingError.message : "Unknown indexing error.",
-        });
-      }
-    }
+    scheduleEntryEmbeddingIndexing({
+      supabase: actor.supabase,
+      records: referencesNeedingEmbedding,
+      context: {
+        ingestionId,
+        userId: actor.user.id,
+      },
+      logError: INGESTION_DEBUG ? console.error : () => undefined,
+    });
 
     return NextResponse.json({
       ingestionId,
       entries,
       referencesSynced: syncedReferences.length,
-      embeddingsIndexed: embeddingResults.filter((result) => result.status === "indexed").length,
-      embeddingsFailed: embeddingResults.filter((result) => result.status === "failed").length,
+      embeddingsQueued: referencesNeedingEmbedding.length,
       entryKeys: materializedEntryObjects.map((item) => item.key),
     });
   } catch (error) {
