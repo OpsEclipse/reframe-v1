@@ -43,6 +43,7 @@ export function OldEntriesArchive({
   onClose,
 }: OldEntriesArchiveProps) {
   const popupRef = useRef<HTMLDivElement>(null);
+  const detailRequestIdRef = useRef(0);
   const dragControls = useDragControls();
   const [entries, setEntries] = useState<ArchiveEntryReference[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(false);
@@ -71,16 +72,18 @@ export function OldEntriesArchive({
     if (!popupRef.current) return;
     const { width: modalWidth, height: modalHeight } =
       popupRef.current.getBoundingClientRect();
+    const rightOffset =
+      window.innerWidth < 640 ? 16 : MODAL_RIGHT_OFFSET_PX;
     setDragConstraints({
       top: -Math.max(
         0,
         window.innerHeight - modalHeight - MODAL_BOTTOM_OFFSET_PX,
       ),
-      right: MODAL_RIGHT_OFFSET_PX,
+      right: rightOffset,
       bottom: MODAL_BOTTOM_OFFSET_PX,
       left: -Math.max(
         0,
-        window.innerWidth - modalWidth - MODAL_RIGHT_OFFSET_PX,
+        window.innerWidth - modalWidth - rightOffset,
       ),
     });
   }, []);
@@ -133,6 +136,8 @@ export function OldEntriesArchive({
   }, [isVisible]);
 
   const openEntry = useCallback((entryId: string) => {
+    const requestId = detailRequestIdRef.current + 1;
+    detailRequestIdRef.current = requestId;
     setSelectedEntryId(entryId);
     setDetail(null);
     setDetailError(null);
@@ -152,25 +157,40 @@ export function OldEntriesArchive({
         }
         return payload as EntryDetailResponse;
       })
-      .then(setDetail)
-      .catch((error) => {
-        setDetailError(
-          error instanceof Error
-            ? error.message
-            : "Entry content could not be loaded.",
-        );
+      .then((payload) => {
+        if (detailRequestIdRef.current === requestId) setDetail(payload);
       })
-      .finally(() => setIsLoadingDetail(false));
+      .catch((error) => {
+        if (detailRequestIdRef.current === requestId) {
+          setDetailError(
+            error instanceof Error
+              ? error.message
+              : "Entry content could not be loaded.",
+          );
+        }
+      })
+      .finally(() => {
+        if (detailRequestIdRef.current === requestId) {
+          setIsLoadingDetail(false);
+        }
+      });
   }, []);
 
   const closeViewer = useCallback(() => {
+    detailRequestIdRef.current += 1;
     setSelectedEntryId(null);
     setDetail(null);
     setDetailError(null);
     setDeleteError(null);
     setIsConfirmingDelete(false);
     setIsDeleting(false);
+    setIsLoadingDetail(false);
   }, []);
+
+  useEffect(() => {
+    if (isVisible) return;
+    closeViewer();
+  }, [closeViewer, isVisible]);
 
   const deleteSelectedEntry = useCallback(async () => {
     if (!selectedEntryId) return;
@@ -207,7 +227,7 @@ export function OldEntriesArchive({
       {isVisible && (
         <motion.div
           ref={popupRef}
-          className="absolute bottom-[80px] right-[84px] z-20 w-[432px] rounded-[2px] bg-[#333332] text-white"
+          className="absolute bottom-[80px] right-[16px] z-20 w-[min(432px,calc(100vw-32px))] rounded-[2px] bg-[#333332] text-white sm:right-[84px]"
           drag
           dragControls={dragControls}
           dragListener={false}
@@ -222,7 +242,7 @@ export function OldEntriesArchive({
           <div className="flex w-full flex-col overflow-hidden rounded-[inherit]">
             <div className="relative border-b border-white/10">
               <div
-                className="flex w-full touch-none select-none items-center justify-between p-[8px]"
+                className="flex w-full cursor-move touch-none select-none items-center justify-between p-[8px]"
                 onPointerDown={(event) => dragControls.start(event)}
               >
                 <div className="flex items-center gap-[8px]">
@@ -268,7 +288,21 @@ export function OldEntriesArchive({
                           <button
                             key={entry.entry_id}
                             type="button"
+                            aria-label={
+                              entry.source_file
+                                ? `${entry.label}, ${entry.source_file}`
+                                : entry.label
+                            }
                             onDoubleClick={() => openEntry(entry.entry_id)}
+                            onKeyDown={(event) => {
+                              if (
+                                event.key === "Enter" ||
+                                event.key === " "
+                              ) {
+                                event.preventDefault();
+                                openEntry(entry.entry_id);
+                              }
+                            }}
                             className="flex min-h-[86px] flex-col items-center justify-start gap-[6px] rounded-[4px] px-[4px] py-[6px] text-center transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35"
                           >
                             <FileText size={36} className="text-white/85" />
@@ -286,7 +320,7 @@ export function OldEntriesArchive({
           </div>
 
           {selectedEntryId && (
-            <div className="absolute bottom-0 left-[-360px] w-[340px] rounded-[2px] bg-[#2b2b2a] shadow-[0px_18px_48px_rgba(0,0,0,0.32)]">
+            <div className="absolute left-[12px] right-[12px] top-[44px] z-10 rounded-[2px] bg-[#2b2b2a] shadow-[0px_18px_48px_rgba(0,0,0,0.32)] sm:bottom-0 sm:left-[-360px] sm:right-auto sm:top-auto sm:w-[340px]">
               <div className="flex items-center justify-between border-b border-white/10 p-[8px]">
                 <p className="font-manrope text-[12px] font-semibold text-white">
                   {selectedEntry?.entry_date ?? "Undated entry"}
