@@ -159,6 +159,14 @@ export async function DELETE(_request: Request, context: EntryRouteContext) {
       );
     }
 
+    const deletedReference = deleteResult.data?.[0];
+    if (!deletedReference) {
+      return NextResponse.json(
+        { error: "Entry reference was not deleted." },
+        { status: 500 },
+      );
+    }
+
     if (reference.pinecone_vector_id) {
       try {
         await deletePineconeEntryVector({
