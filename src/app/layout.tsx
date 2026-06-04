@@ -9,7 +9,7 @@ const robotoMono = Roboto_Mono({ subsets: ["latin"], display: "swap", variable: 
 const pangolin = Pangolin({ subsets: ["latin"], weight: "400", display: "swap", variable: "--font-pangolin" });
 
 export const metadata: Metadata = {
-  title: "VEAP",
+  title: "reframe",
   description: "VEAP journaling flow",
 };
 
