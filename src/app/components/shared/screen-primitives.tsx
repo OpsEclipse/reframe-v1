@@ -12,6 +12,8 @@ import {
   useDragControls,
   type MotionProps,
 } from 'motion/react';
+import { FileText } from 'lucide-react';
+import { OldEntriesArchive } from '@/app/components/archive/OldEntriesArchive';
 import { getMaxFileMb, getMaxFiles, hasSupportedExtension, isSupportedContentType } from '@/lib/ingestion/limits';
 import type { ExtractedEntry, IngestionFileStatus, IngestionStatus } from '@/lib/ingestion/types';
 import { cn } from '../ui/utils';
@@ -180,39 +182,54 @@ interface ResultsResponse {
   entries: ExtractedEntry[];
 }
 
-function PrimaryDockIcon({ onClick }: { onClick: () => void }) {
+function DockIconButton({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
-    <div className="dock-shell">
-      <button
-        onClick={onClick}
-        className="dock-glass cursor-pointer bg-[rgba(235,235,235,0.3)] transition-colors hover:bg-[rgba(255,255,255,0.4)]"
-      >
-        <div
-          aria-hidden="true"
-          className="dock-glass-border"
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="dock-glass cursor-pointer bg-[rgba(235,235,235,0.3)] transition-colors hover:bg-[rgba(255,255,255,0.4)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35"
+    >
+      <div aria-hidden="true" className="dock-glass-border" />
+      <div className="dock-icon-frame">{children}</div>
+    </button>
+  );
+}
+
+function ImporterDockIcon({ onClick }: { onClick: () => void }) {
+  return (
+    <DockIconButton label="Open importer" onClick={onClick}>
+      <svg width="40" height="40" fill="none" viewBox="0 0 40 40">
+        <path
+          d="M33.0361 10.0001C33.5202 10.0002 33.9984 10.1058 34.4375 10.3095C34.8766 10.5132 35.266 10.81 35.5788 11.1794C35.8916 11.5488 36.1202 11.9819 36.2486 12.4486C36.3771 12.9152 36.4024 13.4043 36.3228 13.8817L33.5461 30.5484C33.4163 31.3267 33.0146 32.0337 32.4125 32.5437C31.8104 33.0537 31.0469 33.3335 30.2578 33.3334H9.74781C8.95875 33.3335 8.19523 33.0537 7.5931 32.5437C6.99098 32.0337 6.58928 31.3267 6.45948 30.5484L3.68281 13.8817C3.60319 13.4043 3.6285 12.9152 3.75698 12.4486C3.88547 11.9819 4.11404 11.5488 4.42682 11.1794C4.73959 10.81 5.12907 10.5132 5.56817 10.3095C6.00726 10.1058 6.48545 10.0002 6.96948 10.0001H33.0361Z"
+          fill="white"
+          fillOpacity="0.9"
         />
-        <div className="dock-icon-frame">
-          <svg
-            width="40"
-            height="40"
-            fill="none"
-            viewBox="0 0 40 40"
-          >
-            <path
-              d="M33.0361 10.0001C33.5202 10.0002 33.9984 10.1058 34.4375 10.3095C34.8766 10.5132 35.266 10.81 35.5788 11.1794C35.8916 11.5488 36.1202 11.9819 36.2486 12.4486C36.3771 12.9152 36.4024 13.4043 36.3228 13.8817L33.5461 30.5484C33.4163 31.3267 33.0146 32.0337 32.4125 32.5437C31.8104 33.0537 31.0469 33.3335 30.2578 33.3334H9.74781C8.95875 33.3335 8.19523 33.0537 7.5931 32.5437C6.99098 32.0337 6.58928 31.3267 6.45948 30.5484L3.68281 13.8817C3.60319 13.4043 3.6285 12.9152 3.75698 12.4486C3.88547 11.9819 4.11404 11.5488 4.42682 11.1794C4.73959 10.81 5.12907 10.5132 5.56817 10.3095C6.00726 10.1058 6.48545 10.0002 6.96948 10.0001H33.0361Z"
-              fill="white"
-              fillOpacity="0.9"
-            />
-            <path
-              d="M30.0019 5.0001C30.4439 5.0001 30.8678 5.17569 31.1804 5.48825C31.4929 5.80081 31.6685 6.22474 31.6685 6.66677C31.6685 7.10879 31.4929 7.53272 31.1804 7.84528C30.8678 8.15784 30.4439 8.33343 30.0019 8.33343H10.0019C9.55985 8.33343 9.13593 8.15784 8.82336 7.84528C8.5108 7.53272 8.33521 7.10879 8.33521 6.66677C8.33521 6.22474 8.5108 5.80081 8.82336 5.48825C9.13593 5.17569 9.55985 5.0001 10.0019 5.0001H30.0019Z"
-              fill="white"
-              fillOpacity="0.9"
-              opacity="0.3"
-            />
-          </svg>
-        </div>
-      </button>
-    </div>
+        <path
+          d="M30.0019 5.0001C30.4439 5.0001 30.8678 5.17569 31.1804 5.48825C31.4929 5.80081 31.6685 6.22474 31.6685 6.66677C31.6685 7.10879 31.4929 7.53272 31.1804 7.84528C30.8678 8.15784 30.4439 8.33343 30.0019 8.33343H10.0019C9.55985 8.33343 9.13593 8.15784 8.82336 7.84528C8.5108 7.53272 8.33521 7.10879 8.33521 6.66677C8.33521 6.22474 8.5108 5.80081 8.82336 5.48825C9.13593 5.17569 9.55985 5.0001 10.0019 5.0001H30.0019Z"
+          fill="white"
+          fillOpacity="0.9"
+          opacity="0.3"
+        />
+      </svg>
+    </DockIconButton>
+  );
+}
+
+function ArchiveDockIcon({ onClick }: { onClick: () => void }) {
+  return (
+    <DockIconButton label="We're seeing old entries" onClick={onClick}>
+      <FileText size={38} strokeWidth={1.7} className="text-white/90" />
+    </DockIconButton>
   );
 }
 
@@ -993,17 +1010,23 @@ function ImporterPopup({
 
 export function DockWithImporter() {
   const [showImporter, setShowImporter] = useState(false);
-  const toggleImporter = useCallback(
-    () => setShowImporter((v) => !v),
-    [],
-  );
+  const [showArchive, setShowArchive] = useState(false);
+  const toggleImporter = useCallback(() => setShowImporter((value) => !value), []);
+  const toggleArchive = useCallback(() => setShowArchive((value) => !value), []);
 
   return (
     <>
-      <PrimaryDockIcon onClick={toggleImporter} />
+      <div className="dock-shell flex gap-[10px]">
+        <ImporterDockIcon onClick={toggleImporter} />
+        <ArchiveDockIcon onClick={toggleArchive} />
+      </div>
       <ImporterPopup
         isVisible={showImporter}
         onClose={() => setShowImporter(false)}
+      />
+      <OldEntriesArchive
+        isVisible={showArchive}
+        onClose={() => setShowArchive(false)}
       />
     </>
   );
