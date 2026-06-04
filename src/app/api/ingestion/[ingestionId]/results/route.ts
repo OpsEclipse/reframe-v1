@@ -5,6 +5,7 @@ import { getIngestionBucket, getS3Client } from "@/lib/aws/clients";
 import { scheduleEntryEmbeddingIndexing } from "@/lib/entries/embedding-background";
 import type { EntryEmbeddingRecord } from "@/lib/entries/embedding-index";
 import { getIngestionActor, type IngestionActor } from "@/lib/ingestion/auth";
+import { normalizeEntryDate } from "@/lib/ingestion/dates";
 import { deriveStatusFromFiles, getManifest, withDerivedFileStatuses } from "@/lib/ingestion/manifest";
 import type { ExtractedEntry, IngestionStatus } from "@/lib/ingestion/types";
 import { isValidIngestionId } from "@/lib/ingestion/validation";
@@ -144,28 +145,6 @@ function buildPerEntryObjectKey(params: {
     .slice(0, 12);
 
   return `entries/${params.userId}/${params.ingestionId}/${sourceBase}-${params.entryIndex + 1}-${digest}.json`;
-}
-
-function normalizeEntryDate(value: string | null): string | null {
-  if (!value) {
-    return null;
-  }
-
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
-    return trimmed;
-  }
-
-  const parsed = new Date(trimmed);
-  if (Number.isNaN(parsed.getTime())) {
-    return null;
-  }
-
-  return parsed.toISOString().slice(0, 10);
 }
 
 function getOptionalEntryId(entry: ExtractedEntry): string | null {

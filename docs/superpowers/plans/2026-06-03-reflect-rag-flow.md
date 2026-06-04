@@ -618,7 +618,7 @@ export const REFLECTION_RESPONSE_SCHEMA = {
       minItems: 3,
       maxItems: 10,
       items: {
-        oneOf: [
+        anyOf: [
           {
             type: "object",
             additionalProperties: false,
@@ -1068,7 +1068,6 @@ export async function saveReflectionEntry(params: {
 
   const [indexResult] = await indexEntriesWithDefaultClients({
     supabase: params.supabase,
-    namespaceUserId: params.userId,
     records: [
       {
         userId: params.userId,
@@ -1663,4 +1662,3 @@ Type consistency:
 2. `EntryReferenceWithContent` is defined in Task 3 and used by Task 5 and Task 6.
 3. `session_id` is API response JSON. `sessionId` is client-side state.
 4. `entry_reference` block order is preserved because the UI maps `reflection.blocks` directly.
-

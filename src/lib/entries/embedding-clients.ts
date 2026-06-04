@@ -149,20 +149,22 @@ function omitEmbeddedAt<T extends { embedded_at?: string | null }>(
 function isMissingEmbeddedAtSchemaCacheError(error: {
   message?: string;
 } | null): boolean {
+  const message = error?.message;
   return Boolean(
-    error?.message.includes("embedded_at") &&
-      error.message.includes("schema cache"),
+    message?.includes("embedded_at") &&
+      message.includes("schema cache"),
   );
 }
 
 function isMissingEntryEmbeddingSchemaCacheError(error: {
   message?: string;
 } | null): boolean {
+  const message = error?.message;
   return Boolean(
-    error?.message.includes("schema cache") &&
-      (error.message.includes("embedding_status") ||
-        error.message.includes("pinecone_vector_id") ||
-        error.message.includes("embedded_at")),
+    message?.includes("schema cache") &&
+      (message.includes("embedding_status") ||
+        message.includes("pinecone_vector_id") ||
+        message.includes("embedded_at")),
   );
 }
 

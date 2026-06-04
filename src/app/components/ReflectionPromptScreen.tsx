@@ -10,12 +10,14 @@ import {
 interface ReflectionPromptScreenProps {
 	currentDate: string;
 	currentTime: string;
+	promptText: string;
 	onStart: () => void;
 }
 
 export function ReflectionPromptScreen({
 	currentDate,
 	currentTime,
+	promptText,
 	onStart,
 }: ReflectionPromptScreenProps) {
 	useEffect(() => {
@@ -40,15 +42,13 @@ export function ReflectionPromptScreen({
 				<div className="screen-content-grid">
 					<div className="screen-content-grid-start">
 						<motion.div
-							className="screen-prompt-block"
+							className="w-[768px] max-w-full"
 							initial={{ opacity: 0, y: 12 }}
 							animate={{ opacity: 1, y: 0 }}
 							transition={{ duration: 0.6, delay: 0.3 }}
 						>
 								<p className="font-inter font-medium text-[20px] text-[rgba(255,255,255,0.9)] tracking-[-0.3px] leading-[1.5]">
-									If the version of you from February
-									2025 could see today&apos;s entries, what
-									would he admit he was wrong about?
+									{promptText}
 								</p>
 						</motion.div>
 

@@ -35,6 +35,41 @@ type Screen =
 
 type PostActivityDisabledOption = 'reflect' | 'write' | 'both';
 
+type ReflectionBlock =
+	| { type: 'paragraph'; text: string }
+	| {
+			type: 'entry_reference';
+			entry_id: string;
+			quote: string;
+			text: string;
+	  };
+
+interface ActiveReflectionSession {
+	sessionId: string;
+	primaryEntry: {
+		entry_id: string;
+		entry_date: string | null;
+		entry_text: string;
+	};
+	relatedEntries: Array<{
+		entry_id: string;
+		entry_date: string | null;
+		entry_text: string;
+	}>;
+	reflection: {
+		primary_entry_id: string;
+		blocks: ReflectionBlock[];
+		writing_prompt: { text: string };
+	};
+}
+
+interface ReflectionSessionResponse {
+	session_id: string;
+	primary_entry: ActiveReflectionSession['primaryEntry'];
+	related_entries: ActiveReflectionSession['relatedEntries'];
+	reflection: ActiveReflectionSession['reflection'];
+}
+
 const SCREEN_WRAPPER_CLASS: Record<Screen, string> = {
 	greeting: 'size-full',
 	gratitude: 'size-full',
@@ -52,8 +87,6 @@ const SCREEN_WRAPPER_CLASS: Record<Screen, string> = {
 	complete: 'size-full',
 };
 
-const REFLECTION_PROMPT_TEXT =
-	"If the version of you from February 2025 could see today's entries, what would he admit he was wrong about?";
 const WRITE_PROMPT_TEXT = "What's on your mind today?";
 const GREETING_HOLD_MS = 2500;
 
@@ -82,6 +115,11 @@ function getCurrentTime(now: Date): string {
 export default function App({ userName }: { userName: string }) {
 	const [screen, setScreen] = useState<Screen>('greeting');
 	const [writtenText, setWrittenText] = useState('');
+	const [activeReflection, setActiveReflection] =
+		useState<ActiveReflectionSession | null>(null);
+	const [reflectionError, setReflectionError] = useState<
+		string | null
+	>(null);
 	const [{ greeting, currentDate, currentTime }] = useState(() => {
 		const now = new Date();
 		return {
@@ -102,12 +140,53 @@ export default function App({ userName }: { userName: string }) {
 	);
 
 	// Activity screen: choose REFLECT or WRITE
+	const startReflectionSession = useCallback(async () => {
+		setWrittenText('');
+		setActiveReflection(null);
+		setReflectionError(null);
+		setScreen('journalEntry');
+
+		try {
+			const response = await fetch('/api/reflections/session', {
+				method: 'POST',
+			});
+			const data =
+				(await response.json()) as Partial<ReflectionSessionResponse> & {
+					error?: string;
+				};
+
+			if (!response.ok) {
+				throw new Error(
+					data.error ??
+						`Reflection session failed with status ${response.status}`,
+				);
+			}
+
+			const sessionData = data as ReflectionSessionResponse;
+			setActiveReflection({
+				sessionId: sessionData.session_id,
+				primaryEntry: sessionData.primary_entry,
+				relatedEntries: sessionData.related_entries ?? [],
+				reflection: sessionData.reflection,
+			});
+		} catch (error) {
+			setReflectionError(
+				error instanceof Error
+					? error.message
+					: 'Unable to start a reflection session.',
+			);
+		}
+	}, []);
+
 	const handleSelectReflect = useCallback(
-		() => setScreen('journalEntry'),
-		[],
+		() => void startReflectionSession(),
+		[startReflectionSession],
 	);
 	const handleSelectWrite = useCallback(
-		() => setScreen('writing'),
+		() => {
+			setWrittenText('');
+			setScreen('writing');
+		},
 		[],
 	);
 
@@ -141,6 +220,28 @@ export default function App({ userName }: { userName: string }) {
 		});
 		setScreen('postReflectionActivity');
 	}, []);
+	const saveActiveReflectionWriting = useCallback(async () => {
+		if (!activeReflection) {
+			throw new Error('No active reflection session to save.');
+		}
+
+		const response = await fetch(
+			`/api/reflections/session/${activeReflection.sessionId}/entry`,
+			{
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ entry_text: writtenText }),
+			},
+		);
+		const payload = (await response.json()) as { error?: string };
+
+		if (!response.ok) {
+			throw new Error(
+				payload.error ??
+					`Reflection writing failed to save with status ${response.status}`,
+			);
+		}
+	}, [activeReflection, writtenText]);
 
 	// Write flow (from initial activity)
 	const handleWritingComplete = useCallback(
@@ -163,11 +264,14 @@ export default function App({ userName }: { userName: string }) {
 
 	// Post-reflection activity: write again
 	const handlePostSelectReflect = useCallback(
-		() => setScreen('journalEntry'),
-		[],
+		() => void startReflectionSession(),
+		[startReflectionSession],
 	);
 	const handlePostSelectWrite = useCallback(
-		() => setScreen('postWriting'),
+		() => {
+			setWrittenText('');
+			setScreen('postWriting');
+		},
 		[],
 	);
 	const handlePostWritingComplete = useCallback(
@@ -240,6 +344,8 @@ export default function App({ userName }: { userName: string }) {
 				<JournalEntryScreen
 					currentDate={currentDate}
 					currentTime={currentTime}
+					entry={activeReflection?.primaryEntry}
+					error={reflectionError}
 					onContinue={handleJournalContinue}
 				/>
 			);
@@ -250,6 +356,9 @@ export default function App({ userName }: { userName: string }) {
 					currentDate={currentDate}
 					currentTime={currentTime}
 					userName={userName}
+					entry={activeReflection?.primaryEntry}
+					relatedEntries={activeReflection?.relatedEntries}
+					reflection={activeReflection?.reflection}
 					onComplete={handleAnalysisComplete}
 				/>
 			);
@@ -259,6 +368,10 @@ export default function App({ userName }: { userName: string }) {
 				<ReflectionPromptScreen
 					currentDate={currentDate}
 					currentTime={currentTime}
+					promptText={
+						activeReflection?.reflection.writing_prompt.text ??
+						''
+					}
 					onStart={handleStartReflection}
 				/>
 			);
@@ -268,7 +381,10 @@ export default function App({ userName }: { userName: string }) {
 				<WritingScreen
 					currentDate={currentDate}
 					currentTime={currentTime}
-					promptText={REFLECTION_PROMPT_TEXT}
+					promptText={
+						activeReflection?.reflection.writing_prompt.text ??
+						''
+					}
 					onComplete={handleReflectionWritingComplete}
 				/>
 			);
@@ -278,8 +394,12 @@ export default function App({ userName }: { userName: string }) {
 				<CompletedWritingScreen
 					currentDate={currentDate}
 					currentTime={currentTime}
-					promptText={REFLECTION_PROMPT_TEXT}
+					promptText={
+						activeReflection?.reflection.writing_prompt.text ??
+						''
+					}
 					writtenText={writtenText}
+					onSave={saveActiveReflectionWriting}
 					onComplete={handleCompletedReflectionWriting}
 				/>
 			);

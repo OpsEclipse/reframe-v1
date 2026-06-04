@@ -7,14 +7,29 @@ const zigzagPath = "M17.6551 0L8.82759 4H26.4827H44.1379H61.7931H79.4482H97.1034
 interface JournalEntryScreenProps {
   currentDate: string;
   currentTime: string;
+  entry?: { entry_date: string | null; entry_text: string };
+  error?: string | null;
   onContinue: () => void;
 }
 
-export function JournalEntryScreen({ currentDate, currentTime, onContinue }: JournalEntryScreenProps) {
+function formatEntryDate(entryDate: string | null): string {
+  if (!entryDate) return "RECENT ENTRY";
+
+  const date = new Date(entryDate);
+  if (Number.isNaN(date.getTime())) return entryDate.toUpperCase();
+
+  return date.toLocaleDateString("en-US", {
+    month: "long",
+    year: "numeric",
+  }).toUpperCase();
+}
+
+export function JournalEntryScreen({ currentDate, currentTime, entry, error, onContinue }: JournalEntryScreenProps) {
   useEffect(() => {
+    if (!entry) return;
     const timer = setTimeout(onContinue, 4000);
     return () => clearTimeout(timer);
-  }, [onContinue]);
+  }, [entry, onContinue]);
 
   return (
     <FadeScreen>
@@ -29,7 +44,21 @@ export function JournalEntryScreen({ currentDate, currentTime, onContinue }: Jou
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.8, delay: 0.3 }}
         >
-          <p className="font-roboto-mono font-medium leading-[normal] text-[12px] text-[rgba(255,255,255,0.4)]">OCTOBER 2024, A YEAR AGO</p>
+          {!entry && !error && (
+            <p className="font-roboto-mono font-medium leading-[normal] text-[12px] text-[rgba(255,255,255,0.4)]">
+              FINDING A THREAD TO REFLECT ON
+            </p>
+          )}
+
+          {error && (
+            <p className="font-inter font-medium leading-[1.5] text-[16px] text-[rgba(255,255,255,0.7)] text-center max-w-[420px]">
+              {error}
+            </p>
+          )}
+
+          {entry && (
+            <>
+          <p className="font-roboto-mono font-medium leading-[normal] text-[12px] text-[rgba(255,255,255,0.4)]">{formatEntryDate(entry.entry_date)}</p>
 
           <div className="flex flex-col items-start w-[512px] max-w-full">
             {/* Top zigzag */}
@@ -45,7 +74,7 @@ export function JournalEntryScreen({ currentDate, currentTime, onContinue }: Jou
             <div className="bg-[#ded2c3] w-full">
               <div className="flex items-center justify-center p-[48px]">
                 <p className="flex-1 font-pangolin leading-[1.5] text-[20px] text-[rgba(0,0,0,0.4)]">
-                  I feel stuck again. I keep thinking I should be further ahead by now. Everyone else seems to be building something real, and I&apos;m just trying.
+                  {entry.entry_text}
                 </p>
               </div>
             </div>
@@ -63,6 +92,8 @@ export function JournalEntryScreen({ currentDate, currentTime, onContinue }: Jou
               </div>
             </div>
           </div>
+            </>
+          )}
         </motion.div>
       </div>
     </FadeScreen>

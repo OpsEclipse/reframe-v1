@@ -1,10 +1,15 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { motion } from 'motion/react';
+import { AnimatePresence, motion } from 'motion/react';
+import { X } from 'lucide-react';
 import {
 	EnterIcon,
 	FadeScreen,
 	ScreenHeader,
 } from './shared/screen-primitives';
+import {
+	formatEntryReferenceDate,
+	getEntryReferenceLabel,
+} from '@/lib/reflections/reference-label';
 
 const zigzagPath =
 	'M17.6551 0L8.82759 4H26.4827H44.1379H61.7931H79.4482H97.1034H114.759H132.414H150.069H167.724H185.379H203.034H220.69H238.345H256H273.655H291.31H308.966H326.621H344.276H361.931H379.586H397.241H414.897H432.552H450.207H467.862H485.517H503.172L494.345 0L485.517 4L476.69 0L467.862 4L459.034 0L450.207 4L441.379 0L432.552 4L423.724 0L414.897 4L406.069 0L397.241 4L388.414 0L379.586 4L370.759 0L361.931 4L353.103 0L344.276 4L335.448 0L326.621 4L317.793 0L308.966 4L300.138 0L291.31 4L282.483 0L273.655 4L264.828 0L256 4L247.172 0L238.345 4L229.517 0L220.69 4L211.862 0L203.034 4L194.207 0L185.379 4L176.552 0L167.724 4L158.897 0L150.069 4L141.241 0L132.414 4L123.586 0L114.759 4L105.931 0L97.1034 4L88.2758 0L79.4482 4L70.6207 0L61.7931 4L52.9655 0L44.1379 4L35.3103 0L26.4827 4L17.6551 0Z';
@@ -70,7 +75,7 @@ function useTypewriter(
 			cancelRef.current = true;
 			if (timerRef.current) clearTimeout(timerRef.current);
 		};
-	}, [active, text]); // intentionally excludes baseSpeed from deps
+	}, [active, baseSpeed, text]);
 
 	return { displayedText, isDone };
 }
@@ -166,14 +171,14 @@ function smoothScrollToBottom(
 // ─── Sub-components ───────────────────────────────────────────────────────────
 function EntriesBadge() {
 	return (
-		<div className="bg-[rgba(255,255,255,0.05)] flex gap-[4px] items-center px-[8px] py-[4px] rounded-[4px] text-[10px]">
-			<p className="text-[rgba(255,255,255,0.6)]">3+</p>
-			<p className="text-[rgba(255,255,255,0.25)]">ENTRIES</p>
+		<div className="bg-[rgba(255,255,255,0.05)] flex gap-[4px] items-center px-[8px] py-[4px] rounded-[4px] text-[10px] transition-colors group-hover:bg-[rgba(255,255,255,0.1)]">
+			<p className="text-[rgba(255,255,255,0.6)]">ENTRY</p>
 		</div>
 	);
 }
 
 function TimelineEntry({
+	entryId,
 	label,
 	text,
 	color = 'white',
@@ -181,7 +186,9 @@ function TimelineEntry({
 	strokeOpacity = '0.4',
 	active,
 	onDone,
+	onOpenEntry,
 }: {
+	entryId: string;
 	label: string;
 	text: string;
 	color?: 'white' | 'gold';
@@ -189,10 +196,13 @@ function TimelineEntry({
 	strokeOpacity?: string;
 	active: boolean;
 	onDone?: () => void;
+	onOpenEntry: (entryId: string) => void;
 }) {
 	return (
-		<motion.div
-			className="flex flex-col gap-[16px] items-start w-full"
+		<motion.button
+			type="button"
+			onClick={() => onOpenEntry(entryId)}
+			className="group flex flex-col gap-[16px] items-start w-full text-left cursor-pointer rounded-[4px] transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-[rgba(255,255,255,0.6)]"
 			initial={{ opacity: 0, y: 12 }}
 			animate={{ opacity: 1, y: 0 }}
 			transition={{ duration: 0.5 }}
@@ -233,6 +243,127 @@ function TimelineEntry({
 					/>
 				</p>
 			</div>
+		</motion.button>
+	);
+}
+
+type EntryPopupStatus = 'idle' | 'loading' | 'ready' | 'error';
+
+interface EntryPopupContent {
+	entry_id: string;
+	entry_date: string | null;
+	source_file: string | null;
+	content: {
+		date: string | null;
+		entry_text: string;
+		source_file: string;
+	};
+}
+
+function isEntryPopupContent(
+	payload: EntryPopupContent | { error?: string },
+): payload is EntryPopupContent {
+	return (
+		'content' in payload &&
+		typeof payload.content?.entry_text === 'string'
+	);
+}
+
+async function readEntryPopupPayload(
+	response: Response,
+): Promise<EntryPopupContent | { error?: string }> {
+	const contentType = response.headers.get('content-type') ?? '';
+	if (contentType.includes('application/json')) {
+		return (await response.json()) as
+			| EntryPopupContent
+			| { error?: string };
+	}
+
+	const bodyText = await response.text().catch(() => '');
+	if (response.redirected || response.url.includes('/auth/')) {
+		return { error: 'Please sign in again before opening entries.' };
+	}
+
+	return {
+		error:
+			bodyText.trim().slice(0, 220) ||
+			`Entry endpoint returned ${contentType || 'a non-JSON response'}.`,
+	};
+}
+
+function EntryPopup({
+	entry,
+	status,
+	error,
+	onClose,
+}: {
+	entry: EntryPopupContent | null;
+	status: EntryPopupStatus;
+	error: string | null;
+	onClose: () => void;
+}) {
+	return (
+		<motion.div
+			className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 px-[24px] py-[32px] backdrop-blur-[3px]"
+			onClick={onClose}
+			initial={{ opacity: 0 }}
+			animate={{ opacity: 1 }}
+			exit={{ opacity: 0 }}
+		>
+			<motion.div
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="entry-popup-title"
+				onClick={(event) => event.stopPropagation()}
+				className="relative flex max-h-full w-[560px] max-w-full flex-col overflow-hidden rounded-[8px] bg-[#ded2c3] text-black shadow-[0_28px_80px_rgba(0,0,0,0.35)]"
+				initial={{ opacity: 0, y: 18, scale: 0.98 }}
+				animate={{ opacity: 1, y: 0, scale: 1 }}
+				exit={{ opacity: 0, y: 12, scale: 0.98 }}
+				transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
+			>
+				<div className="flex items-center justify-between border-b border-black/10 px-[24px] py-[18px]">
+					<div className="flex flex-col gap-[4px]">
+						<p
+							id="entry-popup-title"
+							className="font-roboto-mono text-[12px] font-medium uppercase text-black/45"
+						>
+							{entry
+								? formatEntryReferenceDate(entry.entry_date)
+								: 'ENTRY'}
+						</p>
+						{entry?.source_file && (
+							<p className="font-roboto-mono text-[10px] font-medium uppercase text-black/30">
+								{entry.source_file}
+							</p>
+						)}
+					</div>
+					<button
+						type="button"
+						aria-label="Close entry"
+						onClick={onClose}
+						className="flex size-[32px] items-center justify-center rounded-[4px] text-black/45 transition-colors hover:bg-black/5 hover:text-black/70 focus-visible:outline focus-visible:outline-1 focus-visible:outline-black/50"
+					>
+						<X className="size-[16px]" />
+					</button>
+				</div>
+				<div className="overflow-y-auto px-[24px] py-[24px]">
+					{status === 'loading' && (
+						<p className="font-inter text-[16px] leading-[1.6] text-black/45">
+							Loading entry...
+						</p>
+					)}
+					{status === 'error' && (
+						<p className="font-inter text-[16px] leading-[1.6] text-black/55">
+							{error ?? 'Could not load this entry.'}
+						</p>
+					)}
+					{status === 'ready' && entry && (
+						<p className="whitespace-pre-wrap font-inter text-[16px] leading-[1.65] text-black/65">
+							{entry.content.entry_text}
+						</p>
+					)}
+				</div>
+			</motion.div>
 		</motion.div>
 	);
 }
@@ -242,27 +373,146 @@ interface ReflectionAnalysisScreenProps {
 	currentDate: string;
 	currentTime: string;
 	userName: string;
+	entry?: {
+		entry_id: string;
+		entry_date: string | null;
+		entry_text: string;
+	};
+	relatedEntries?: Array<{
+		entry_id: string;
+		entry_date: string | null;
+		entry_text: string;
+	}>;
+	reflection?: {
+		blocks: ReflectionBlock[];
+	};
 	onComplete: () => void;
 }
+
+type ReflectionBlock =
+	| { type: 'paragraph'; text: string }
+	| {
+			type: 'entry_reference';
+			entry_id: string;
+			quote: string;
+			text: string;
+	  };
 
 export function ReflectionAnalysisScreen({
 	currentDate,
 	currentTime,
 	userName,
+	entry,
+	relatedEntries = [],
+	reflection,
 	onComplete,
 }: ReflectionAnalysisScreenProps) {
-	// -1 = card animating in; 0-11 = typewriter phases; 12 = ENTER visible
+	// -1 = card animating in; 0 = greeting; blocks start at 1.
 	const [phase, setPhase] = useState(-1);
+	const [openEntryId, setOpenEntryId] = useState<string | null>(
+		null,
+	);
+	const [entryPopupStatus, setEntryPopupStatus] =
+		useState<EntryPopupStatus>('idle');
+	const [entryPopupContent, setEntryPopupContent] =
+		useState<EntryPopupContent | null>(null);
+	const [entryPopupError, setEntryPopupError] = useState<
+		string | null
+	>(null);
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const scrollRafRef = useRef<number | undefined>(undefined);
+	const completionPhase = (reflection?.blocks.length ?? 0) + 1;
+	const entryDatesById = new Map<string, string | null>([
+		...(entry ? [[entry.entry_id, entry.entry_date] as const] : []),
+		...relatedEntries.map(
+			(relatedEntry) =>
+				[
+					relatedEntry.entry_id,
+					relatedEntry.entry_date,
+				] as const,
+		),
+	]);
 
 	// Begin typing after the journal card slides in
 	useEffect(() => {
+		if (!entry || !reflection) return;
+		setPhase(-1);
 		const t = setTimeout(() => setPhase(0), 1350);
 		return () => clearTimeout(t);
-	}, []);
+	}, [entry, reflection]);
 
 	const advance = useCallback(() => setPhase((p) => p + 1), []);
+	const openEntryPopup = useCallback((entryId: string) => {
+		setOpenEntryId(entryId);
+		setEntryPopupContent(null);
+		setEntryPopupError(null);
+		setEntryPopupStatus('loading');
+	}, []);
+	const closeEntryPopup = useCallback(() => {
+		setOpenEntryId(null);
+		setEntryPopupStatus('idle');
+		setEntryPopupContent(null);
+		setEntryPopupError(null);
+	}, []);
+
+	useEffect(() => {
+		if (!openEntryId) return;
+
+		const entryIdToLoad = openEntryId;
+		const controller = new AbortController();
+
+		async function fetchEntry() {
+			try {
+				setEntryPopupStatus('loading');
+				const response = await fetch(
+					`/api/entries/${encodeURIComponent(entryIdToLoad)}`,
+					{
+						headers: { Accept: 'application/json' },
+						signal: controller.signal,
+					},
+				);
+				const payload = await readEntryPopupPayload(response);
+
+				if (!response.ok) {
+					throw new Error(
+						'error' in payload && payload.error
+							? payload.error
+							: `Entry failed to load with status ${response.status}`,
+						);
+				}
+
+				if (!isEntryPopupContent(payload)) {
+					throw new Error('Entry response was missing entry text.');
+				}
+
+				setEntryPopupContent(payload);
+				setEntryPopupStatus('ready');
+			} catch (error) {
+				if (controller.signal.aborted) return;
+				setEntryPopupError(
+					error instanceof Error
+						? error.message
+						: 'Could not load this entry.',
+				);
+				setEntryPopupStatus('error');
+			}
+		}
+
+		void fetchEntry();
+
+		return () => controller.abort();
+	}, [openEntryId]);
+
+	useEffect(() => {
+		if (!openEntryId) return;
+
+		const handleKeyDown = (event: KeyboardEvent) => {
+			if (event.key === 'Escape') closeEntryPopup();
+		};
+
+		window.addEventListener('keydown', handleKeyDown);
+		return () => window.removeEventListener('keydown', handleKeyDown);
+	}, [closeEntryPopup, openEntryId]);
 
 	// Slow smooth scroll whenever a new phase becomes visible
 	useEffect(() => {
@@ -278,16 +528,34 @@ export function ReflectionAnalysisScreen({
 	// Enter key shortcut once analysis is complete
 	useEffect(() => {
 		const onKey = (e: KeyboardEvent) => {
-			if (e.key === 'Enter' && phase >= 12) onComplete();
+			if (e.key === 'Enter' && phase >= completionPhase)
+				onComplete();
 		};
 		window.addEventListener('keydown', onKey);
 		return () => window.removeEventListener('keydown', onKey);
-	}, [phase, onComplete]);
+	}, [completionPhase, phase, onComplete]);
 
 	const mono =
 		'font-roboto-mono font-medium text-[16px] text-[rgba(255,255,255,0.9)]';
 	const inter =
 		'font-inter font-medium leading-[1.5] text-[16px] text-[rgba(255,255,255,0.9)]';
+
+	if (!entry || !reflection) {
+		return (
+			<FadeScreen>
+				<ScreenHeader
+					currentDate={currentDate}
+					currentTime={currentTime}
+					className="shrink-0"
+				/>
+				<div className="screen-content-rail">
+					<p className="font-roboto-mono font-medium text-[12px] text-[rgba(255,255,255,0.4)]">
+						READING YOUR REFLECTION
+					</p>
+				</div>
+			</FadeScreen>
+		);
+	}
 
 	return (
 		<FadeScreen>
@@ -315,7 +583,7 @@ export function ReflectionAnalysisScreen({
 					}}
 				>
 					<p className="font-roboto-mono font-medium leading-[normal] text-[12px] text-[rgba(255,255,255,0.4)]">
-						OCTOBER 2024, A YEAR AGO
+						{formatEntryReferenceDate(entry.entry_date)}
 					</p>
 					<div className="flex flex-col items-start w-[512px] max-w-full">
 						{/* Top zigzag */}
@@ -340,11 +608,7 @@ export function ReflectionAnalysisScreen({
 						<div className="bg-[#ded2c3] w-full">
 							<div className="flex items-center justify-center p-[48px]">
 								<p className="flex-1 font-inter font-normal leading-[normal] text-[16px] text-[rgba(0,0,0,0.4)] tracking-[-0.64px]">
-									I feel stuck again. I keep
-									thinking I should be further ahead
-									by now. Everyone else seems to be
-									building something real, and
-									I&apos;m just trying.
+									{entry.entry_text}
 								</p>
 							</div>
 						</div>
@@ -389,175 +653,50 @@ export function ReflectionAnalysisScreen({
 							/>
 						</p>
 
-						{/* 1 — stationary */}
-						{phase >= 1 && (
-							<p className={mono}>
-								<TypewriterText
-									text="A year ago today, you believed you were stationary."
-									active={phase === 1}
-									onDone={
-										phase === 1
-											? advance
-											: undefined
-									}
-								/>
-							</p>
-						)}
+						{reflection.blocks.map((block, index) => {
+							const blockPhase = index + 1;
+							if (phase < blockPhase) return null;
 
-						{/* 2 — "stuck" */}
-						{phase >= 2 && (
-							<p className={mono}>
-								<TypewriterText
-									text={`You used the word "stuck."`}
-									active={phase === 2}
-									onDone={
-										phase === 2
-											? advance
-											: undefined
-									}
-								/>
-							</p>
-						)}
+							if (block.type === 'paragraph') {
+								return (
+									<p
+										key={`${block.type}-${index}`}
+										className={inter}
+									>
+										<TypewriterText
+											text={block.text}
+											active={phase === blockPhase}
+											onDone={
+												phase === blockPhase
+													? advance
+													: undefined
+											}
+										/>
+									</p>
+								);
+							}
 
-						{/* 3 — "behind" */}
-						{phase >= 3 && (
-							<p className={mono}>
-								<TypewriterText
-									text={`You used the word "behind."`}
-									active={phase === 3}
-									onDone={
-										phase === 3
-											? advance
-											: undefined
-									}
-								/>
-							</p>
-						)}
-
-						{/* 4 — motion vs direction */}
-						{phase >= 4 && (
-							<p className={mono}>
-								<TypewriterText
-									text="You compared motion without measuring direction."
-									active={phase === 4}
-									onDone={
-										phase === 4
-											? advance
-											: undefined
-									}
-								/>
-							</p>
-						)}
-
-						{/* 5 — entries show change */}
-						{phase >= 5 && (
-							<p className={mono}>
-								<TypewriterText
-									text="But if we look, your entries show change:"
-									active={phase === 5}
-									onDone={
-										phase === 5
-											? advance
-											: undefined
-									}
-								/>
-							</p>
-						)}
-
-						{/* 6-8 — timeline entries */}
-						{phase >= 6 && (
-							<div className="flex flex-col gap-[48px] w-full">
+							return (
 								<TimelineEntry
-									label="IN APRIL 2025"
-									text="You took on a project you weren't sure you could handle."
-									active={phase === 6}
+									key={`${block.entry_id}-${index}`}
+									entryId={block.entry_id}
+									label={getEntryReferenceLabel(
+										block.entry_id,
+										entryDatesById,
+									)}
+									text={`"${block.quote}"\n\n${block.text}`}
+									active={phase === blockPhase}
 									onDone={
-										phase === 6
+										phase === blockPhase
 											? advance
 											: undefined
 									}
+									onOpenEntry={openEntryPopup}
 								/>
-								{phase >= 7 && (
-									<TimelineEntry
-										label="4 MONTHS LATER, IN AUGUST 2025"
-										text="You wrote about being exhausted from responsibility."
-										active={phase === 7}
-										onDone={
-											phase === 7
-												? advance
-												: undefined
-										}
-									/>
-								)}
-								{phase >= 8 && (
-									<TimelineEntry
-										label="AND FINALLY, ON DECEMBER 16 2025"
-										text="You described leading something start to finish."
-										color="gold"
-										strokeColor="#FCC84E"
-										strokeOpacity="1"
-										active={phase === 8}
-										onDone={
-											phase === 8
-												? advance
-												: undefined
-										}
-									/>
-								)}
-							</div>
-						)}
+							);
+						})}
 
-						{/* 9 — not stuck, early */}
-						{phase >= 9 && (
-							<p className={inter}>
-								<TypewriterText
-									text={
-										'You were not stuck.\nYou were early.'
-									}
-									active={phase === 9}
-									onDone={
-										phase === 9
-											? advance
-											: undefined
-									}
-								/>
-							</p>
-						)}
-
-						{/* 10 — pattern */}
-						{phase >= 10 && (
-							<p className={inter}>
-								<TypewriterText
-									text={
-										'There is a pattern in your archive:\nYou call the beginning of growth \u201cfailure.\u201d'
-									}
-									active={phase === 10}
-									onDone={
-										phase === 10
-											? advance
-											: undefined
-									}
-								/>
-							</p>
-						)}
-
-						{/* 11 — closing question */}
-						{phase >= 11 && (
-							<p className={inter}>
-								<TypewriterText
-									text="Why do you only recognize movement once it becomes undeniable?"
-									active={phase === 11}
-									onDone={
-										phase === 11
-											? advance
-											: undefined
-									}
-								/>
-							</p>
-						)}
-
-						{/* 12 — ENTER button */}
-						{phase >= 12 && (
+						{phase >= completionPhase && (
 							<motion.button
 								onClick={onComplete}
 								className="action-outline"
@@ -593,6 +732,16 @@ export function ReflectionAnalysisScreen({
 					</div>
 				)}
 			</div>
+			<AnimatePresence>
+				{openEntryId && (
+					<EntryPopup
+						entry={entryPopupContent}
+						status={entryPopupStatus}
+						error={entryPopupError}
+						onClose={closeEntryPopup}
+					/>
+				)}
+			</AnimatePresence>
 		</FadeScreen>
 	);
 }

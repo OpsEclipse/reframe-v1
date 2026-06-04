@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion } from 'motion/react';
 import {
 	EnterActionButton,
@@ -12,6 +12,7 @@ interface CompletedWritingScreenProps {
 	currentTime: string;
 	promptText: string;
 	writtenText: string;
+	onSave?: () => Promise<void>;
 	onComplete: () => void;
 }
 
@@ -20,16 +21,39 @@ export function CompletedWritingScreen({
 	currentTime,
 	promptText,
 	writtenText,
+	onSave,
 	onComplete,
 }: CompletedWritingScreenProps) {
+	const [isSaving, setIsSaving] = useState(false);
+	const [saveError, setSaveError] = useState<string | null>(null);
+	const handleComplete = useCallback(async () => {
+		if (isSaving) return;
+
+		setIsSaving(true);
+		setSaveError(null);
+
+		try {
+			await onSave?.();
+			onComplete();
+		} catch (error) {
+			setSaveError(
+				error instanceof Error
+					? error.message
+					: 'Unable to save your writing.',
+			);
+		} finally {
+			setIsSaving(false);
+		}
+	}, [isSaving, onComplete, onSave]);
+
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
-			if (e.key === 'Enter') onComplete();
+			if (e.key === 'Enter') void handleComplete();
 		};
 		window.addEventListener('keydown', handleKeyDown);
 		return () =>
 			window.removeEventListener('keydown', handleKeyDown);
-	}, [onComplete]);
+	}, [handleComplete]);
 
 	return (
 		<FadeScreen>
@@ -89,12 +113,18 @@ export function CompletedWritingScreen({
 							transition={{ duration: 0.4, delay: 0.5 }}
 						>
 							<EnterActionButton
-								label="COMPLETE"
-								onClick={onComplete}
+								label={isSaving ? 'SAVING' : 'COMPLETE'}
+								onClick={() => void handleComplete()}
 								tone="dark"
 								variant="solid"
 							/>
 						</motion.div>
+
+						{saveError && (
+							<p className="font-inter font-medium text-[14px] text-[rgba(255,255,255,0.55)] leading-[1.5]">
+								{saveError}
+							</p>
+						)}
 					</div>
 				</div>
 			</div>

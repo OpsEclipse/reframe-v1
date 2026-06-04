@@ -1,0 +1,86 @@
+<h2>Old Entries Pop-Up Layout</h2>
+<p class="subtitle">Both options show file icons named by date and ordered newest to oldest.</p>
+
+<div class="split">
+  <div class="card" data-choice="compact-grid" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">We&apos;re seeing old entries</div>
+        <div class="mockup-body">
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:18px;padding:14px">
+            <div style="text-align:center">
+              <div style="font-size:42px">▱</div>
+              <div style="font-size:12px">Jun 03, 2026</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:42px">▱</div>
+              <div style="font-size:12px">May 28, 2026</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:42px">▱</div>
+              <div style="font-size:12px">May 14, 2026</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:42px">▱</div>
+              <div style="font-size:12px">Apr 30, 2026</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:42px">▱</div>
+              <div style="font-size:12px">Apr 02, 2026</div>
+            </div>
+            <div style="text-align:center">
+              <div style="font-size:42px">▱</div>
+              <div style="font-size:12px">Mar 15, 2026</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Compact File Grid</h3>
+      <p>Simple desktop-like grid. Best when the archive is mostly for browsing.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="date-grouped-grid" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">We&apos;re seeing old entries</div>
+        <div class="mockup-body">
+          <div style="padding:14px">
+            <div style="font-size:12px;margin:0 0 10px;opacity:.7">2026</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-bottom:18px">
+              <div style="text-align:center">
+                <div style="font-size:42px">▱</div>
+                <div style="font-size:12px">Jun 03</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:42px">▱</div>
+                <div style="font-size:12px">May 28</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:42px">▱</div>
+                <div style="font-size:12px">May 14</div>
+              </div>
+            </div>
+            <div style="font-size:12px;margin:0 0 10px;opacity:.7">2025</div>
+            <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:16px">
+              <div style="text-align:center">
+                <div style="font-size:42px">▱</div>
+                <div style="font-size:12px">Dec 12</div>
+              </div>
+              <div style="text-align:center">
+                <div style="font-size:42px">▱</div>
+                <div style="font-size:12px">Nov 19</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>Date-Grouped File Grid</h3>
+      <p>Still icon-first, with year labels. Best when the archive gets large.</p>
+    </div>
+  </div>
+</div>

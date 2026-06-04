@@ -2,39 +2,7 @@ import { redirect } from 'next/navigation';
 import App from './App';
 import { SettingsMenu } from './components/SettingsMenu';
 import { createClient } from '@/lib/supabase/server';
-
-function getUserDisplayName(email: string | undefined, metadata: unknown): string {
-  if (metadata && typeof metadata === 'object') {
-    const typed = metadata as {
-      full_name?: unknown;
-      name?: unknown;
-      user_name?: unknown;
-    };
-
-    if (typeof typed.full_name === 'string' && typed.full_name.trim()) {
-      return typed.full_name.trim();
-    }
-
-    if (typeof typed.name === 'string' && typed.name.trim()) {
-      return typed.name.trim();
-    }
-
-    if (typeof typed.user_name === 'string' && typed.user_name.trim()) {
-      return typed.user_name.trim();
-    }
-  }
-
-  if (!email) {
-    return 'there';
-  }
-
-  const [localPart] = email.split('@');
-  if (!localPart) {
-    return 'there';
-  }
-
-  return localPart;
-}
+import { getUserDisplayName } from '@/lib/profile/display-name';
 
 export default async function HomePage() {
   const supabase = await createClient();
@@ -46,7 +14,18 @@ export default async function HomePage() {
     redirect('/auth/login');
   }
 
-  const userDisplayName = getUserDisplayName(user.email, user.user_metadata);
+  const { data: clientProfile } = await supabase
+    .from('clients')
+    .select('display_name')
+    .eq('user_id', user.id)
+    .eq('name', 'primary')
+    .maybeSingle();
+
+  const userDisplayName = getUserDisplayName({
+    clientDisplayName: clientProfile?.display_name,
+    email: user.email,
+    metadata: user.user_metadata,
+  });
 
   return (
     <div className="relative">
