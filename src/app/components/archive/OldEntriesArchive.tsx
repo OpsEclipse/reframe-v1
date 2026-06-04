@@ -54,7 +54,7 @@ export function OldEntriesArchive({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [isDeleting, setIsDeleting] = useState(false);
+  const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
   const [dragConstraints, setDragConstraints] = useState({
     top: 0,
     right: MODAL_RIGHT_OFFSET_PX,
@@ -67,6 +67,7 @@ export function OldEntriesArchive({
     () => entries.find((entry) => entry.entry_id === selectedEntryId) ?? null,
     [entries, selectedEntryId],
   );
+  const isDeleting = deletingEntryId === selectedEntryId;
 
   const updateDragConstraints = useCallback(() => {
     if (!popupRef.current) return;
@@ -183,7 +184,7 @@ export function OldEntriesArchive({
     setDetailError(null);
     setDeleteError(null);
     setIsConfirmingDelete(false);
-    setIsDeleting(false);
+    setDeletingEntryId(null);
     setIsLoadingDetail(false);
   }, []);
 
@@ -195,12 +196,14 @@ export function OldEntriesArchive({
   const deleteSelectedEntry = useCallback(async () => {
     if (!selectedEntryId) return;
 
-    setIsDeleting(true);
+    const entryIdBeingDeleted = selectedEntryId;
+
+    setDeletingEntryId(entryIdBeingDeleted);
     setDeleteError(null);
 
     try {
       const response = await fetch(
-        `/api/entries/${encodeURIComponent(selectedEntryId)}`,
+        `/api/entries/${encodeURIComponent(entryIdBeingDeleted)}`,
         {
           method: "DELETE",
         },
@@ -210,23 +213,47 @@ export function OldEntriesArchive({
         throw new Error(parseError(payload, "Failed to delete entry."));
       }
       setEntries((current) =>
-        current.filter((entry) => entry.entry_id !== selectedEntryId),
+        current.filter((entry) => entry.entry_id !== entryIdBeingDeleted),
       );
-      closeViewer();
+      setSelectedEntryId((currentSelectedEntryId) => {
+        if (currentSelectedEntryId !== entryIdBeingDeleted) {
+          return currentSelectedEntryId;
+        }
+
+        detailRequestIdRef.current += 1;
+        setDetail(null);
+        setDetailError(null);
+        setDeleteError(null);
+        setIsConfirmingDelete(false);
+        setIsLoadingDetail(false);
+        return null;
+      });
     } catch (error) {
-      setDeleteError(
-        error instanceof Error ? error.message : "Failed to delete entry.",
-      );
+      setSelectedEntryId((currentSelectedEntryId) => {
+        if (currentSelectedEntryId === entryIdBeingDeleted) {
+          setDeleteError(
+            error instanceof Error ? error.message : "Failed to delete entry.",
+          );
+        }
+        return currentSelectedEntryId;
+      });
     } finally {
-      setIsDeleting(false);
+      setDeletingEntryId((currentDeletingEntryId) =>
+        currentDeletingEntryId === entryIdBeingDeleted
+          ? null
+          : currentDeletingEntryId,
+      );
     }
-  }, [closeViewer, selectedEntryId]);
+  }, [selectedEntryId]);
 
   return (
     <AnimatePresence>
       {isVisible && (
         <motion.div
           ref={popupRef}
+          role="dialog"
+          aria-modal="false"
+          aria-labelledby="old-entries-archive-title"
           className="absolute bottom-[80px] right-[16px] z-20 w-[min(432px,calc(100vw-32px))] rounded-[2px] bg-[#333332] text-white sm:right-[84px]"
           drag
           dragControls={dragControls}
@@ -247,7 +274,10 @@ export function OldEntriesArchive({
               >
                 <div className="flex items-center gap-[8px]">
                   <FileText size={16} className="text-white/90" />
-                  <p className="font-manrope text-[12px] font-semibold text-white">
+                  <p
+                    id="old-entries-archive-title"
+                    className="font-manrope text-[12px] font-semibold text-white"
+                  >
                     We&apos;re seeing old entries
                   </p>
                 </div>
@@ -263,7 +293,7 @@ export function OldEntriesArchive({
               </div>
             </div>
 
-            <div className="max-h-[460px] overflow-auto px-[18px] py-[16px]">
+            <div className="max-h-[min(460px,calc(100vh-128px))] overflow-auto px-[18px] py-[16px]">
               {isLoadingList ? (
                 <p className="font-manrope text-[12px] text-white/60">
                   Loading old entries...
@@ -335,7 +365,7 @@ export function OldEntriesArchive({
                 </button>
               </div>
 
-              <div className="flex max-h-[420px] flex-col gap-[12px] overflow-auto p-[16px]">
+              <div className="flex max-h-[min(420px,calc(100vh-160px))] flex-col gap-[12px] overflow-auto p-[16px]">
                 {selectedEntry?.source_file ? (
                   <p className="font-manrope text-[11px] text-white/45">
                     {selectedEntry.source_file}
