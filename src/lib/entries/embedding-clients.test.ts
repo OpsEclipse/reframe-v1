@@ -5,11 +5,13 @@ import type { PineconeEntryMetadata } from "@/lib/entries/embedding-index";
 const clientMocks = vi.hoisted(() => {
   const openAIEmbeddingsCreate = vi.fn();
   const pineconeUpsert = vi.fn();
+  const pineconeDeleteOne = vi.fn();
   const pineconeNamespace = vi.fn(() => ({
     upsert: pineconeUpsert,
   }));
   const pineconeIndex = vi.fn(() => ({
     namespace: pineconeNamespace,
+    deleteOne: pineconeDeleteOne,
   }));
 
   return {
@@ -29,6 +31,7 @@ const clientMocks = vi.hoisted(() => {
     pineconeIndex,
     pineconeNamespace,
     pineconeUpsert,
+    pineconeDeleteOne,
   };
 });
 
@@ -68,6 +71,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   clientMocks.openAIEmbeddingsCreate.mockReset();
   clientMocks.pineconeUpsert.mockReset();
+  clientMocks.pineconeDeleteOne.mockReset();
   process.env = { ...originalEnv };
   delete process.env.OPENAI_API_KEY;
   delete process.env.PINECONE_API_KEY;
@@ -243,6 +247,26 @@ describe("upsertPineconeVector", () => {
         message: "index not found",
       },
     );
+  });
+});
+
+describe("deletePineconeEntryVector", () => {
+  it("deletes one vector from the user's namespace", async () => {
+    const { deletePineconeEntryVector } = await import("@/lib/entries/embedding-clients");
+    process.env.PINECONE_API_KEY = "pinecone-key";
+    process.env.PINECONE_INDEX_NAME = "entries-index";
+    process.env.PINECONE_NAMESPACE_PREFIX = "user";
+
+    await deletePineconeEntryVector({
+      userId: "user-123",
+      vectorId: "entry:entry-abc",
+    });
+
+    expect(clientMocks.pineconeIndex).toHaveBeenCalledWith("entries-index");
+    expect(clientMocks.pineconeDeleteOne).toHaveBeenCalledWith({
+      id: "entry:entry-abc",
+      namespace: "user:user-123",
+    });
   });
 });
 

@@ -2,6 +2,7 @@ import { Pinecone } from "@pinecone-database/pinecone";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import OpenAI from "openai";
 import {
+  buildPineconeNamespace,
   EMBEDDING_DIMENSIONS,
   EMBEDDING_MODEL,
   indexEntryEmbeddings,
@@ -115,6 +116,35 @@ export async function upsertPineconeVector(
   }
 
   console.log("[entry-embeddings] pinecone upsert completed", logDetails);
+}
+
+export async function deletePineconeEntryVector(params: {
+  userId: string;
+  vectorId: string;
+}): Promise<void> {
+  const indexName = getRequiredEnv("PINECONE_INDEX_NAME");
+  const namespace = buildPineconeNamespace(
+    params.userId,
+    getPineconeNamespacePrefix(),
+  );
+  const index = getPineconeClient().index(indexName);
+
+  console.log("[entry-embeddings] pinecone delete starting", {
+    indexName,
+    namespace,
+    vectorId: params.vectorId,
+  });
+
+  await index.deleteOne({
+    id: params.vectorId,
+    namespace,
+  });
+
+  console.log("[entry-embeddings] pinecone delete completed", {
+    indexName,
+    namespace,
+    vectorId: params.vectorId,
+  });
 }
 
 export function buildEntryEmbeddingUpdatePayload(
