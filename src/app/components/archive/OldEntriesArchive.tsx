@@ -43,6 +43,7 @@ export function OldEntriesArchive({
   onClose,
 }: OldEntriesArchiveProps) {
   const popupRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
   const detailRequestIdRef = useRef(0);
   const dragControls = useDragControls();
   const [entries, setEntries] = useState<ArchiveEntryReference[]>([]);
@@ -91,10 +92,27 @@ export function OldEntriesArchive({
 
   useEffect(() => {
     if (!isVisible) return;
+
+    const popup = popupRef.current;
     updateDragConstraints();
     window.addEventListener("resize", updateDragConstraints);
-    return () => window.removeEventListener("resize", updateDragConstraints);
+
+    const resizeObserver =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(updateDragConstraints);
+    if (popup && resizeObserver) resizeObserver.observe(popup);
+
+    return () => {
+      window.removeEventListener("resize", updateDragConstraints);
+      resizeObserver?.disconnect();
+    };
   }, [isVisible, updateDragConstraints]);
+
+  useEffect(() => {
+    if (!isVisible) return;
+    closeButtonRef.current?.focus();
+  }, [isVisible]);
 
   useEffect(() => {
     if (!isVisible) return;
@@ -282,6 +300,7 @@ export function OldEntriesArchive({
                   </p>
                 </div>
                 <button
+                  ref={closeButtonRef}
                   type="button"
                   aria-label="Close old entries"
                   onClick={onClose}
@@ -295,11 +314,17 @@ export function OldEntriesArchive({
 
             <div className="max-h-[min(460px,calc(100vh-128px))] overflow-auto px-[18px] py-[16px]">
               {isLoadingList ? (
-                <p className="font-manrope text-[12px] text-white/60">
+                <p
+                  aria-live="polite"
+                  className="font-manrope text-[12px] text-white/60"
+                >
                   Loading old entries...
                 </p>
               ) : listError ? (
-                <p className="font-manrope text-[12px] text-[#ffb3b3]">
+                <p
+                  aria-live="polite"
+                  className="font-manrope text-[12px] text-[#ffb3b3]"
+                >
                   {listError}
                 </p>
               ) : groups.length === 0 ? (
@@ -323,16 +348,7 @@ export function OldEntriesArchive({
                                 ? `${entry.label}, ${entry.source_file}`
                                 : entry.label
                             }
-                            onDoubleClick={() => openEntry(entry.entry_id)}
-                            onKeyDown={(event) => {
-                              if (
-                                event.key === "Enter" ||
-                                event.key === " "
-                              ) {
-                                event.preventDefault();
-                                openEntry(entry.entry_id);
-                              }
-                            }}
+                            onClick={() => openEntry(entry.entry_id)}
                             className="flex min-h-[86px] flex-col items-center justify-start gap-[6px] rounded-[4px] px-[4px] py-[6px] text-center transition-colors hover:bg-white/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/35"
                           >
                             <FileText size={36} className="text-white/85" />
@@ -373,11 +389,17 @@ export function OldEntriesArchive({
                 ) : null}
 
                 {isLoadingDetail ? (
-                  <p className="font-manrope text-[12px] text-white/60">
+                  <p
+                    aria-live="polite"
+                    className="font-manrope text-[12px] text-white/60"
+                  >
                     Opening entry...
                   </p>
                 ) : detailError ? (
-                  <p className="font-manrope text-[12px] text-[#ffb3b3]">
+                  <p
+                    aria-live="polite"
+                    className="font-manrope text-[12px] text-[#ffb3b3]"
+                  >
                     {detailError}
                   </p>
                 ) : (
@@ -387,7 +409,10 @@ export function OldEntriesArchive({
                 )}
 
                 {deleteError ? (
-                  <p className="font-manrope text-[12px] text-[#ffb3b3]">
+                  <p
+                    aria-live="polite"
+                    className="font-manrope text-[12px] text-[#ffb3b3]"
+                  >
                     {deleteError}
                   </p>
                 ) : null}
