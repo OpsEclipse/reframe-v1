@@ -59,8 +59,33 @@ export function normalizeEntryPayload(payload: unknown): ExtractedEntry | null {
   return null;
 }
 
+export function normalizeEntryRawContent(
+  raw: string,
+  fallbackSourceFile: string | null,
+): ExtractedEntry | null {
+  const trimmed = raw.trim();
+  if (!trimmed) return null;
+
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    const normalized = normalizeEntryPayload(parsed);
+    if (normalized) return normalized;
+  } catch (error) {
+    if (!(error instanceof SyntaxError)) {
+      throw error;
+    }
+  }
+
+  return {
+    date: null,
+    entry_text: raw,
+    source_file: fallbackSourceFile ?? "",
+  };
+}
+
 export async function readEntryContentFromS3(
   s3Key: string,
+  fallbackSourceFile: string | null = null,
 ): Promise<ExtractedEntry | null> {
   const object = await getS3Client().send(
     new GetObjectCommand({
@@ -70,7 +95,5 @@ export async function readEntryContentFromS3(
   );
 
   const raw = await bodyToString(object.Body);
-  if (!raw) return null;
-
-  return normalizeEntryPayload(JSON.parse(raw));
+  return normalizeEntryRawContent(raw, fallbackSourceFile);
 }
