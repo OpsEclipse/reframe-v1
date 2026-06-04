@@ -1,5 +1,8 @@
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { NextResponse } from "next/server";
+import { getIngestionBucket, getS3Client } from "@/lib/aws/clients";
 import { readEntryContentFromS3 } from "@/lib/entries/content";
+import { deletePineconeEntryVector } from "@/lib/entries/embedding-clients";
 import { getIngestionActor } from "@/lib/ingestion/auth";
 
 export const runtime = "nodejs";
@@ -15,6 +18,7 @@ interface EntryReferenceRow {
   s3_key: string;
   source_file: string | null;
   entry_date: string | null;
+  pinecone_vector_id?: string | null;
 }
 
 function isUnauthorizedError(error: unknown): boolean {
@@ -39,7 +43,7 @@ export async function GET(_request: Request, context: EntryRouteContext) {
 
     const { data, error } = await actor.supabase
       .from("entries")
-      .select("entry_id,s3_key,source_file,entry_date")
+      .select("entry_id,s3_key,source_file,entry_date,pinecone_vector_id")
       .eq("user_id", actor.user.id)
       .eq("entry_id", cleanEntryId)
       .limit(1);
@@ -58,7 +62,7 @@ export async function GET(_request: Request, context: EntryRouteContext) {
 
     let content;
     try {
-      content = await readEntryContentFromS3(reference.s3_key);
+      content = await readEntryContentFromS3(reference.s3_key, reference.source_file);
     } catch (error) {
       const message =
         error instanceof SyntaxError
@@ -89,6 +93,97 @@ export async function GET(_request: Request, context: EntryRouteContext) {
     }
 
     const message = error instanceof Error ? error.message : "Failed to fetch entry.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(_request: Request, context: EntryRouteContext) {
+  try {
+    const actor = await getIngestionActor();
+    if (!actor) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
+
+    const { entryId } = await context.params;
+    const cleanEntryId = entryId.trim();
+    if (!cleanEntryId) {
+      return NextResponse.json({ error: "entryId is required." }, { status: 400 });
+    }
+
+    const { data, error } = await actor.supabase
+      .from("entries")
+      .select("entry_id,s3_key,source_file,entry_date,pinecone_vector_id")
+      .eq("user_id", actor.user.id)
+      .eq("entry_id", cleanEntryId)
+      .limit(1);
+
+    if (error) {
+      return NextResponse.json(
+        { error: `Failed to load entry reference: ${error.message}` },
+        { status: 500 },
+      );
+    }
+
+    const reference = (data?.[0] as EntryReferenceRow | undefined) ?? null;
+    if (!reference) {
+      return NextResponse.json({ error: "Entry not found." }, { status: 404 });
+    }
+
+    try {
+      await getS3Client().send(
+        new DeleteObjectCommand({
+          Bucket: getIngestionBucket(),
+          Key: reference.s3_key,
+        }),
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to delete entry file from S3.";
+      return NextResponse.json(
+        { error: `Failed to delete entry file from S3: ${message}` },
+        { status: 502 },
+      );
+    }
+
+    const deleteResult = await actor.supabase
+      .from("entries")
+      .delete()
+      .eq("user_id", actor.user.id)
+      .eq("entry_id", cleanEntryId)
+      .select("entry_id")
+      .limit(1);
+
+    if (deleteResult.error) {
+      return NextResponse.json(
+        { error: `Failed to delete entry reference: ${deleteResult.error.message}` },
+        { status: 500 },
+      );
+    }
+
+    if (reference.pinecone_vector_id) {
+      try {
+        await deletePineconeEntryVector({
+          userId: actor.user.id,
+          vectorId: reference.pinecone_vector_id,
+        });
+      } catch (error) {
+        console.error("[entries] failed to delete pinecone vector", {
+          entryId: cleanEntryId,
+          vectorId: reference.pinecone_vector_id,
+          message: error instanceof Error ? error.message : "Unknown Pinecone error.",
+        });
+      }
+    }
+
+    return NextResponse.json({
+      deleted: true,
+      entry_id: reference.entry_id,
+    });
+  } catch (error) {
+    if (isUnauthorizedError(error)) {
+      return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
+    }
+
+    const message = error instanceof Error ? error.message : "Failed to delete entry.";
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
