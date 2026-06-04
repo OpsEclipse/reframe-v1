@@ -255,7 +255,7 @@ describe("deletePineconeEntryVector", () => {
     const { deletePineconeEntryVector } = await import("@/lib/entries/embedding-clients");
     process.env.PINECONE_API_KEY = "pinecone-key";
     process.env.PINECONE_INDEX_NAME = "entries-index";
-    process.env.PINECONE_NAMESPACE_PREFIX = "user";
+    process.env.PINECONE_NAMESPACE_PREFIX = "client";
 
     await deletePineconeEntryVector({
       userId: "user-123",
@@ -265,7 +265,7 @@ describe("deletePineconeEntryVector", () => {
     expect(clientMocks.pineconeIndex).toHaveBeenCalledWith("entries-index");
     expect(clientMocks.pineconeDeleteOne).toHaveBeenCalledWith({
       id: "entry:entry-abc",
-      namespace: "user:user-123",
+      namespace: "client:user-123",
     });
   });
 });
