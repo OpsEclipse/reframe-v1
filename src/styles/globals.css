@@ -109,7 +109,7 @@
 	}
 
 	.screen-prompt-block {
-		@apply w-[384px] max-w-full;
+		@apply w-[768px] max-w-full;
 	}
 
 	.action-outline {
