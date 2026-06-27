@@ -20,7 +20,7 @@ const zigzagPath =
 function useTypewriter(
 	text: string,
 	active: boolean,
-	baseSpeed = 44,
+	baseSpeed = 24,
 ) {
 	const [displayedText, setDisplayedText] = useState('');
 	const [isDone, setIsDone] = useState(false);
@@ -59,10 +59,10 @@ function useTypewriter(
 			// Natural speed: base ± jitter, longer pauses on punctuation
 			let delay = baseSpeed + (Math.random() * 24 - 12);
 			if (['.', '!', '?'].includes(char))
-				delay += 230 + Math.random() * 140;
+				delay += 120 + Math.random() * 80;
 			else if ([',', ';', ':'].includes(char))
-				delay += 95 + Math.random() * 50;
-			else if (char === '\n') delay += 180;
+				delay += 55 + Math.random() * 35;
+			else if (char === '\n') delay += 90;
 			else if (char === ' ') delay *= 0.72;
 
 			timerRef.current = setTimeout(type, Math.max(14, delay));
@@ -180,7 +180,8 @@ function EntriesBadge() {
 function TimelineEntry({
 	entryId,
 	label,
-	text,
+	quote,
+	reflectionText,
 	color = 'white',
 	strokeColor = 'white',
 	strokeOpacity = '0.4',
@@ -190,7 +191,8 @@ function TimelineEntry({
 }: {
 	entryId: string;
 	label: string;
-	text: string;
+	quote: string;
+	reflectionText: string;
 	color?: 'white' | 'gold';
 	strokeColor?: string;
 	strokeOpacity?: string;
@@ -198,52 +200,70 @@ function TimelineEntry({
 	onDone?: () => void;
 	onOpenEntry: (entryId: string) => void;
 }) {
+	const [reflectionStarted, setReflectionStarted] =
+		useState(false);
+
+	useEffect(() => {
+		if (active) setReflectionStarted(false);
+	}, [active, quote, reflectionText]);
+
 	return (
-		<motion.button
-			type="button"
-			onClick={() => onOpenEntry(entryId)}
-			className="group flex flex-col gap-[16px] items-start w-full text-left cursor-pointer rounded-[4px] transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-[rgba(255,255,255,0.6)]"
-			initial={{ opacity: 0, y: 12 }}
-			animate={{ opacity: 1, y: 0 }}
-			transition={{ duration: 0.5 }}
-		>
-			<div className="flex items-center justify-between w-full font-roboto-mono font-medium leading-[normal]">
-				<p
-					className={`text-[12px] ${color === 'gold' ? 'text-[#fcc84e]' : 'text-[rgba(255,255,255,0.4)]'}`}
-				>
-					{label}
-				</p>
-				<EntriesBadge />
-			</div>
-			<div className="flex gap-[16px] items-center w-full">
-				{/* Vertical line */}
-				<div className="flex items-center self-stretch">
-					<div className="h-full relative w-0">
-						<div className="absolute inset-[0_-0.5px]">
-							<svg
-								className="block size-full"
-								fill="none"
-								preserveAspectRatio="none"
-								viewBox="0 0 1 24"
-							>
-								<path
-									d="M0.5 0V24"
-									stroke={strokeColor}
-									strokeOpacity={strokeOpacity}
-								/>
-							</svg>
+		<div className="flex flex-col gap-[24px] w-full">
+			<motion.button
+				type="button"
+				onClick={() => onOpenEntry(entryId)}
+				className="group flex flex-col gap-[16px] items-start w-full text-left cursor-pointer rounded-[4px] transition-colors focus-visible:outline focus-visible:outline-1 focus-visible:outline-[rgba(255,255,255,0.6)]"
+				initial={{ opacity: 0, y: 12 }}
+				animate={{ opacity: 1, y: 0 }}
+				transition={{ duration: 0.5 }}
+			>
+				<div className="flex items-center justify-between w-full font-roboto-mono font-medium leading-[normal]">
+					<p
+						className={`text-[12px] ${color === 'gold' ? 'text-[#fcc84e]' : 'text-[rgba(255,255,255,0.4)]'}`}
+					>
+						{label}
+					</p>
+					<EntriesBadge />
+				</div>
+				<div className="flex gap-[16px] items-center w-full">
+					{/* Vertical line */}
+					<div className="flex items-center self-stretch">
+						<div className="h-full relative w-0">
+							<div className="absolute inset-[0_-0.5px]">
+								<svg
+									className="block size-full"
+									fill="none"
+									preserveAspectRatio="none"
+									viewBox="0 0 1 24"
+								>
+									<path
+										d="M0.5 0V24"
+										stroke={strokeColor}
+										strokeOpacity={strokeOpacity}
+									/>
+								</svg>
+							</div>
 						</div>
 					</div>
+					<p className="flex-1 font-inter font-medium leading-[1.5] text-[16px] text-[rgba(255,255,255,0.9)]">
+						<TypewriterText
+							text={`"${quote}"`}
+							active={active}
+							onDone={() => setReflectionStarted(true)}
+						/>
+					</p>
 				</div>
-				<p className="flex-1 font-inter font-medium leading-[1.5] text-[16px] text-[rgba(255,255,255,0.9)]">
+			</motion.button>
+			{reflectionStarted && (
+				<p className="font-inter font-medium leading-[1.5] text-[16px] text-[rgba(255,255,255,0.9)]">
 					<TypewriterText
-						text={text}
-						active={active}
+						text={reflectionText}
+						active={active && reflectionStarted}
 						onDone={onDone}
 					/>
 				</p>
-			</div>
-		</motion.button>
+			)}
+		</div>
 	);
 }
 
@@ -684,7 +704,8 @@ export function ReflectionAnalysisScreen({
 										block.entry_id,
 										entryDatesById,
 									)}
-									text={`"${block.quote}"\n\n${block.text}`}
+									quote={block.quote}
+									reflectionText={block.text}
 									active={phase === blockPhase}
 									onDone={
 										phase === blockPhase

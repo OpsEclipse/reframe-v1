@@ -17,8 +17,7 @@ export function buildReflectionResponseSchema(allowedEntryIds: string[]) {
       primary_entry_id: entryIdSchema,
       blocks: {
         type: "array",
-        minItems: 3,
-        maxItems: 10,
+        minItems: 1,
         items: {
           anyOf: [
             {
@@ -85,7 +84,10 @@ export function buildReflectionInstructions(): string {
     "Comfort, validate, and challenge.",
     "Be casual, but do not say yo.",
     "Sound close to the user's tone, without copying it.",
+    "Use 3 to 10 narrative blocks.",
     "Use entry references only as entry_reference blocks.",
+    "The quote field must contain only exact entry text, never your reflection.",
+    "Put your reflection about that quote in the text field.",
     "Let the narrative decide where entry_reference blocks appear.",
     "If an entry was excerpted for length, only quote from the visible excerpt.",
     "End with exactly one open-ended writing prompt.",

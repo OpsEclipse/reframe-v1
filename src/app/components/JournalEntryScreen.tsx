@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { motion } from "motion/react";
 import { FadeScreen, ScreenHeader } from "./shared/screen-primitives";
+import { formatEntryReferenceDate } from "@/lib/reflections/reference-label";
 
 const zigzagPath = "M17.6551 0L8.82759 4H26.4827H44.1379H61.7931H79.4482H97.1034H114.759H132.414H150.069H167.724H185.379H203.034H220.69H238.345H256H273.655H291.31H308.966H326.621H344.276H361.931H379.586H397.241H414.897H432.552H450.207H467.862H485.517H503.172L494.345 0L485.517 4L476.69 0L467.862 4L459.034 0L450.207 4L441.379 0L432.552 4L423.724 0L414.897 4L406.069 0L397.241 4L388.414 0L379.586 4L370.759 0L361.931 4L353.103 0L344.276 4L335.448 0L326.621 4L317.793 0L308.966 4L300.138 0L291.31 4L282.483 0L273.655 4L264.828 0L256 4L247.172 0L238.345 4L229.517 0L220.69 4L211.862 0L203.034 4L194.207 0L185.379 4L176.552 0L167.724 4L158.897 0L150.069 4L141.241 0L132.414 4L123.586 0L114.759 4L105.931 0L97.1034 4L88.2758 0L79.4482 4L70.6207 0L61.7931 4L52.9655 0L44.1379 4L35.3103 0L26.4827 4L17.6551 0Z";
 
@@ -10,18 +11,6 @@ interface JournalEntryScreenProps {
   entry?: { entry_date: string | null; entry_text: string };
   error?: string | null;
   onContinue: () => void;
-}
-
-function formatEntryDate(entryDate: string | null): string {
-  if (!entryDate) return "RECENT ENTRY";
-
-  const date = new Date(entryDate);
-  if (Number.isNaN(date.getTime())) return entryDate.toUpperCase();
-
-  return date.toLocaleDateString("en-US", {
-    month: "long",
-    year: "numeric",
-  }).toUpperCase();
 }
 
 export function JournalEntryScreen({ currentDate, currentTime, entry, error, onContinue }: JournalEntryScreenProps) {
@@ -47,6 +36,7 @@ export function JournalEntryScreen({ currentDate, currentTime, entry, error, onC
           {!entry && !error && (
             <p className="font-roboto-mono font-medium leading-[normal] text-[12px] text-[rgba(255,255,255,0.4)]">
               FINDING A THREAD TO REFLECT ON
+              <span aria-hidden="true" className="reflect-loading-dots" />
             </p>
           )}
 
@@ -58,7 +48,7 @@ export function JournalEntryScreen({ currentDate, currentTime, entry, error, onC
 
           {entry && (
             <>
-          <p className="font-roboto-mono font-medium leading-[normal] text-[12px] text-[rgba(255,255,255,0.4)]">{formatEntryDate(entry.entry_date)}</p>
+          <p className="font-roboto-mono font-medium leading-[normal] text-[12px] text-[rgba(255,255,255,0.4)]">{formatEntryReferenceDate(entry.entry_date)}</p>
 
           <div className="flex flex-col items-start w-[512px] max-w-full">
             {/* Top zigzag */}

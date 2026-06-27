@@ -58,6 +58,13 @@ describe("buildReflectionResponseSchema", () => {
       const: "entry_reference",
     });
   });
+
+  it("uses Anthropic-compatible array rules for blocks", () => {
+    const schema = buildReflectionResponseSchema(["entry-a"]);
+
+    expect(schema.properties.blocks.minItems).toBe(1);
+    expect(schema.properties.blocks).not.toHaveProperty("maxItems");
+  });
 });
 
 describe("buildReflectionInstructions", () => {
@@ -65,6 +72,8 @@ describe("buildReflectionInstructions", () => {
     const instructions = buildReflectionInstructions();
 
     expect(instructions).toContain("open-ended writing prompt");
+    expect(instructions).toContain("Use 3 to 10 narrative blocks");
+    expect(instructions).toContain("The quote field must contain only exact entry text");
     expect(instructions).toContain("February 2025");
     expect(instructions).toContain("Avoid narrow yes/no questions");
   });

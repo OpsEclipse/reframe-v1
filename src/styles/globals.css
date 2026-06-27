@@ -35,6 +35,28 @@
 	.font-pangolin {
 		font-family: var(--font-pangolin), cursive;
 	}
+
+	@keyframes reflect-loading-dots {
+		0%,
+		24.99% {
+			content: "";
+		}
+
+		25%,
+		49.99% {
+			content: ".";
+		}
+
+		50%,
+		74.99% {
+			content: "..";
+		}
+
+		75%,
+		100% {
+			content: "...";
+		}
+	}
 }
 
 @layer components {
@@ -106,6 +128,14 @@
 
 	.screen-action-inline {
 		@apply self-start;
+	}
+
+	.reflect-loading-dots::after {
+		animation: reflect-loading-dots 2s steps(1, end) infinite;
+		content: "";
+		display: inline-block;
+		text-align: left;
+		width: 3ch;
 	}
 
 	.screen-prompt-block {

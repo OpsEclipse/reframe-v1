@@ -11,7 +11,7 @@ import type { EntryEmbeddingStatus } from "@/lib/entries/embedding-index";
 import {
   generateReflectionResponse,
   getReflectionModel,
-} from "@/lib/reflections/openai-client";
+} from "@/lib/reflections/anthropic-client";
 import { searchRelatedEntriesByVectorId } from "@/lib/reflections/pinecone-search";
 import type { ReflectionResponse } from "@/lib/reflections/types";
 
