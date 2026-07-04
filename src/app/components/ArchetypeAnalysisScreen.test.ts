@@ -41,4 +41,23 @@ describe("ArchetypeAnalysisScreen", () => {
     );
     expect(source).toContain("CONTINUE");
   });
+
+  it("uses a top-safe scroll layout for narrow screens", () => {
+    expect(source).toContain(
+      'className="size-full overflow-y-auto px-[24px] py-[32px] md:py-[56px]"',
+    );
+    expect(source).toContain(
+      'className="flex min-h-full w-full flex-col items-center justify-start md:justify-center"',
+    );
+    expect(source).not.toContain(
+      'className="flex size-full flex-col items-center justify-center overflow-y-auto px-[24px] py-[56px]"',
+    );
+  });
+
+  it("keeps rich card content outside the interactive overlay", () => {
+    expect(source).toContain(
+      "aria-label={`Select ${archetype.name} archetype`}",
+    );
+    expect(source).toContain("pointer-events-none");
+  });
 });

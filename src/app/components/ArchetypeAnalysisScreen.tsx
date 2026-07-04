@@ -35,7 +35,6 @@ const toneClasses: Record<
     selectedText: string;
     mutedText: string;
     border: string;
-    selectedRing: string;
     mutedBorder: string;
   }
 > = {
@@ -43,21 +42,18 @@ const toneClasses: Record<
     selectedText: "text-[#6bde7c]",
     mutedText: "text-[rgba(107,222,124,0.42)]",
     border: "border-[rgba(107,222,124,0.42)]",
-    selectedRing: "border-[rgba(107,222,124,0.22)]",
     mutedBorder: "border-[rgba(107,222,124,0.32)]",
   },
   orange: {
     selectedText: "text-[#ff845f]",
     mutedText: "text-[rgba(255,132,95,0.5)]",
     border: "border-[#ff845f]",
-    selectedRing: "border-[rgba(255,132,95,0.22)]",
     mutedBorder: "border-[rgba(255,132,95,0.32)]",
   },
   purple: {
     selectedText: "text-[#bd7cff]",
     mutedText: "text-[rgba(189,124,255,0.42)]",
     border: "border-[rgba(189,124,255,0.42)]",
-    selectedRing: "border-[rgba(189,124,255,0.22)]",
     mutedBorder: "border-[rgba(189,124,255,0.32)]",
   },
 };
@@ -76,9 +72,10 @@ function ArchetypeCard({
   return (
     <motion.div
       className={cn(
-        "relative flex w-full max-w-[314px] shrink-0",
-        isSelected && "border-[5px] border-solid p-0",
-        isSelected && tone.selectedRing,
+        "relative flex h-[420px] w-full max-w-[314px] shrink-0 flex-col items-start justify-between border border-solid p-[24px] text-left transition-[opacity,transform,background-color] duration-200 md:h-[588px] md:p-[29px]",
+        isSelected
+          ? cn(tone.border, tone.selectedText, "opacity-100")
+          : cn(tone.mutedBorder, tone.mutedText, "opacity-50 hover:opacity-70"),
       )}
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
@@ -86,15 +83,12 @@ function ArchetypeCard({
     >
       <button
         type="button"
+        aria-label={`Select ${archetype.name} archetype`}
         aria-pressed={isSelected}
         onClick={onSelect}
-        className={cn(
-          "flex h-[420px] w-full flex-col items-start justify-between border border-solid p-[24px] text-left transition-[opacity,transform,background-color] duration-200 focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/60 md:h-[588px] md:p-[29px]",
-          isSelected
-            ? cn(tone.border, tone.selectedText, "opacity-100")
-            : cn(tone.mutedBorder, tone.mutedText, "opacity-50 hover:opacity-70"),
-        )}
-      >
+        className="absolute inset-0 z-10 cursor-pointer rounded-none focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/60"
+      />
+      <div className="pointer-events-none relative z-0 flex h-full w-full flex-col items-start justify-between">
         <div className="flex flex-col items-start gap-[24px] md:gap-[29px]">
           <h2 className="font-manrope text-[24px] font-semibold leading-[normal] tracking-[0]">
             {archetype.name}
@@ -120,7 +114,7 @@ function ArchetypeCard({
             </span>
           ))}
         </div>
-      </button>
+      </div>
     </motion.div>
   );
 }
@@ -151,33 +145,35 @@ export function ArchetypeAnalysisScreen({
   }, [onComplete]);
 
   return (
-    <div className="flex size-full flex-col items-center justify-center overflow-y-auto px-[24px] py-[56px]">
-      <div className="flex w-full max-w-[908px] flex-col items-center gap-[32px] md:gap-[39px]">
-        <motion.h1
-          className="max-w-full text-center font-manrope text-[20px] font-semibold leading-[normal] tracking-[0] text-white/90 md:text-[24.5px]"
-          initial={{ opacity: 0, y: 8 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4 }}
-        >
-          Based off your entries, you fall into the following user archetype
-        </motion.h1>
+    <div className="size-full overflow-y-auto px-[24px] py-[32px] md:py-[56px]">
+      <div className="flex min-h-full w-full flex-col items-center justify-start md:justify-center">
+        <div className="flex w-full max-w-[908px] flex-col items-center gap-[32px] md:gap-[39px]">
+          <motion.h1
+            className="max-w-full text-center font-manrope text-[20px] font-semibold leading-[normal] tracking-[0] text-white/90 md:text-[24.5px]"
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.4 }}
+          >
+            Based off your entries, you fall into the following user archetype
+          </motion.h1>
 
-        <div className="grid w-full grid-cols-1 justify-items-center gap-[24px] md:grid-cols-3 md:items-start md:gap-[18px] lg:gap-[29px]">
-          {archetypes.map((archetype) => (
-            <ArchetypeCard
-              key={archetype.id}
-              archetype={archetype}
-              isSelected={archetype.id === selectedArchetypeId}
-              onSelect={() => setSelectedArchetypeId(archetype.id)}
-            />
-          ))}
+          <div className="grid w-full grid-cols-1 justify-items-center gap-[24px] md:grid-cols-3 md:items-start md:gap-[18px] lg:gap-[29px]">
+            {archetypes.map((archetype) => (
+              <ArchetypeCard
+                key={archetype.id}
+                archetype={archetype}
+                isSelected={archetype.id === selectedArchetypeId}
+                onSelect={() => setSelectedArchetypeId(archetype.id)}
+              />
+            ))}
+          </div>
+
+          <EnterActionButton
+            label="CONTINUE"
+            onClick={onComplete}
+            className="self-center"
+          />
         </div>
-
-        <EnterActionButton
-          label="CONTINUE"
-          onClick={onComplete}
-          className="self-center"
-        />
       </div>
     </div>
   );
