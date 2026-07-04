@@ -6,6 +6,8 @@ import {
 } from "./archetype-data";
 
 describe("mock archetype data", () => {
+  const expectedTags = ["SYMBOLIC", "INTERPRETIVE", "PATTERN-SEEKING"];
+
   it("defines the three mocked archetypes from the Figma result screen", () => {
     expect(MOCK_ARCHETYPES.map((archetype) => archetype.name)).toEqual([
       "ANCHOR",
@@ -14,9 +16,11 @@ describe("mock archetype data", () => {
     ]);
 
     expect(MOCK_ARCHETYPES).toHaveLength(3);
-    expect(MOCK_ARCHETYPES.every((archetype) => archetype.tags.length > 0)).toBe(
-      true,
-    );
+    expect(MOCK_ARCHETYPES.map((archetype) => archetype.tags)).toEqual([
+      expectedTags,
+      expectedTags,
+      expectedTags,
+    ]);
   });
 
   it("starts with seeker selected and falls back to the first archetype", () => {
@@ -28,5 +32,6 @@ describe("mock archetype data", () => {
         { ...MOCK_ARCHETYPES[1], selected: false },
       ]),
     ).toBe("anchor");
+    expect(getInitialArchetypeId([])).toBe(DEFAULT_ARCHETYPE_ID);
   });
 });
