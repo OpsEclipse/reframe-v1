@@ -427,7 +427,6 @@ The ingestion UI is not visible in the inspected app flow yet. The backend route
 
 The actual extraction worker is outside this repository. The API expects a Starter Lambda to update S3 manifests and write entry JSON.
 
-The old `GET /api/veap` and `POST /api/veap` routes are scaffold routes [placeholder endpoints that exist for future work]. They return `501 Not Implemented`.
 
 There is duplicated body parsing and extracted-entry normalization across routes. This could become a shared helper.
 

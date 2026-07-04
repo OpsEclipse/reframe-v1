@@ -70,22 +70,6 @@ interface ReflectionSessionResponse {
 	reflection: ActiveReflectionSession['reflection'];
 }
 
-const SCREEN_WRAPPER_CLASS: Record<Screen, string> = {
-	greeting: 'size-full',
-	gratitude: 'size-full',
-	activity: 'size-full',
-	journalEntry: 'size-full',
-	reflectionAnalysis: 'size-full',
-	reflectionPrompt: 'size-full',
-	reflectionWriting: 'size-full',
-	completedReflectionWriting: 'size-full',
-	writing: 'size-full',
-	completedWriting: 'size-full',
-	postReflectionActivity: 'size-full',
-	postWriting: 'size-full',
-	completedPostWriting: 'size-full',
-	complete: 'size-full',
-};
 
 const WRITE_PROMPT_TEXT = "What's on your mind today?";
 const GREETING_HOLD_MS = 2500;
@@ -474,7 +458,7 @@ export default function App({ userName }: { userName: string }) {
 					<AnimatePresence mode="wait">
 						<div
 							key={screen}
-							className={SCREEN_WRAPPER_CLASS[screen]}
+							className="size-full"
 						>
 							{screenNode}
 						</div>

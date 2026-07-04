@@ -1,20 +1,13 @@
 import type { NextConfig } from "next";
-import path from "node:path";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  outputFileTracingRoot: __dirname,
   experimental: {
-    optimizePackageImports: ["lucide-react", "@mui/material", "@mui/icons-material"],
+    optimizePackageImports: ["lucide-react"],
   },
   images: {
     disableStaticImages: true,
-  },
-  webpack: (config) => {
-    config.resolve.alias = {
-      ...(config.resolve.alias ?? {}),
-      "figma:asset": path.resolve(__dirname, "src/assets"),
-    };
-    return config;
   },
 };
 

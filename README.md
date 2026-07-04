@@ -27,8 +27,6 @@ This project is migrated from a Vite React prototype to a Next.js App Router app
 ## API scaffold
 
 - `GET /api/health` returns a basic health payload.
-- `GET /api/veap` returns `501 Not Implemented`.
-- `POST /api/veap` returns `501 Not Implemented`.
 - `POST /api/ingestion/presign` returns pre-signed S3 upload URLs for journal files.
 - `POST /api/ingestion/submit` writes manifest state and asynchronously invokes the Starter Lambda.
 - `GET /api/ingestion/[ingestionId]/status` returns manifest-backed ingestion progress.
