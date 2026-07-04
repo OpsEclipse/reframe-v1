@@ -12,6 +12,7 @@ import { GratitudeScreen } from './components/GratitudeScreen';
 import { ActivityScreen } from './components/ActivityScreen';
 import { JournalEntryScreen } from './components/JournalEntryScreen';
 import { ReflectionAnalysisScreen } from './components/ReflectionAnalysisScreen';
+import { ArchetypeAnalysisScreen } from './components/ArchetypeAnalysisScreen';
 import { ReflectionPromptScreen } from './components/ReflectionPromptScreen';
 import { WritingScreen } from './components/WritingScreen';
 import { CompletedWritingScreen } from './components/CompletedWritingScreen';
@@ -23,6 +24,7 @@ type Screen =
 	| 'activity'
 	| 'journalEntry'
 	| 'reflectionAnalysis'
+	| 'archetypeAnalysis'
 	| 'reflectionPrompt'
 	| 'reflectionWriting'
 	| 'completedReflectionWriting'
@@ -76,6 +78,7 @@ const SCREEN_WRAPPER_CLASS: Record<Screen, string> = {
 	activity: 'size-full',
 	journalEntry: 'size-full',
 	reflectionAnalysis: 'size-full',
+	archetypeAnalysis: 'size-full',
 	reflectionPrompt: 'size-full',
 	reflectionWriting: 'size-full',
 	completedReflectionWriting: 'size-full',
@@ -196,6 +199,10 @@ export default function App({ userName }: { userName: string }) {
 		[],
 	);
 	const handleAnalysisComplete = useCallback(
+		() => setScreen('archetypeAnalysis'),
+		[],
+	);
+	const handleArchetypeComplete = useCallback(
 		() => setScreen('reflectionPrompt'),
 		[],
 	);
@@ -360,6 +367,13 @@ export default function App({ userName }: { userName: string }) {
 					relatedEntries={activeReflection?.relatedEntries}
 					reflection={activeReflection?.reflection}
 					onComplete={handleAnalysisComplete}
+				/>
+			);
+			break;
+		case 'archetypeAnalysis':
+			screenNode = (
+				<ArchetypeAnalysisScreen
+					onComplete={handleArchetypeComplete}
 				/>
 			);
 			break;
