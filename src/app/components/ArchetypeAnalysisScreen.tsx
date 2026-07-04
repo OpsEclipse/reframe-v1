@@ -32,26 +32,30 @@ function shouldIgnoreGlobalEnter(target: EventTarget | null): boolean {
 const toneClasses: Record<
   ArchetypeTone,
   {
-    text: string;
+    selectedText: string;
+    mutedText: string;
     border: string;
     selectedRing: string;
     mutedBorder: string;
   }
 > = {
   green: {
-    text: "text-[rgba(107,222,124,0.42)]",
+    selectedText: "text-[#6bde7c]",
+    mutedText: "text-[rgba(107,222,124,0.42)]",
     border: "border-[rgba(107,222,124,0.42)]",
     selectedRing: "border-[rgba(107,222,124,0.22)]",
     mutedBorder: "border-[rgba(107,222,124,0.32)]",
   },
   orange: {
-    text: "text-[#ff845f]",
+    selectedText: "text-[#ff845f]",
+    mutedText: "text-[rgba(255,132,95,0.5)]",
     border: "border-[#ff845f]",
     selectedRing: "border-[rgba(255,132,95,0.22)]",
     mutedBorder: "border-[rgba(255,132,95,0.32)]",
   },
   purple: {
-    text: "text-[rgba(189,124,255,0.42)]",
+    selectedText: "text-[#bd7cff]",
+    mutedText: "text-[rgba(189,124,255,0.42)]",
     border: "border-[rgba(189,124,255,0.42)]",
     selectedRing: "border-[rgba(189,124,255,0.22)]",
     mutedBorder: "border-[rgba(189,124,255,0.32)]",
@@ -87,8 +91,8 @@ function ArchetypeCard({
         className={cn(
           "flex h-[420px] w-full flex-col items-start justify-between border border-solid p-[24px] text-left transition-[opacity,transform,background-color] duration-200 focus-visible:outline focus-visible:outline-1 focus-visible:outline-white/60 md:h-[588px] md:p-[29px]",
           isSelected
-            ? cn(tone.border, tone.text, "opacity-100")
-            : cn(tone.mutedBorder, tone.text, "opacity-50 hover:opacity-70"),
+            ? cn(tone.border, tone.selectedText, "opacity-100")
+            : cn(tone.mutedBorder, tone.mutedText, "opacity-50 hover:opacity-70"),
         )}
       >
         <div className="flex flex-col items-start gap-[24px] md:gap-[29px]">
