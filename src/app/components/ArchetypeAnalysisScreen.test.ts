@@ -16,7 +16,14 @@ describe("ArchetypeAnalysisScreen", () => {
     expect(source).toContain("setSelectedArchetypeId");
     expect(source).toContain("aria-pressed");
     expect(source).toContain("event.key === 'Enter'");
+    expect(source).toContain("shouldIgnoreGlobalEnter");
+    expect(source).toContain("closest");
     expect(source).toContain("onComplete");
+  });
+
+  it("renders the screen heading as a semantic h1", () => {
+    expect(source).toContain("<motion.h1");
+    expect(source).toContain("</motion.h1>");
   });
 
   it("keeps the Figma copy and selected archetype visible in code", () => {

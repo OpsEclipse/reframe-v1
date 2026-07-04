@@ -13,6 +13,22 @@ interface ArchetypeAnalysisScreenProps {
   onComplete: () => void;
 }
 
+const interactiveSelector = [
+  "button",
+  "a[href]",
+  "input",
+  "textarea",
+  "select",
+  "[role='button']",
+  "[role='link']",
+  "[contenteditable='true']",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function shouldIgnoreGlobalEnter(target: EventTarget | null): boolean {
+  return target instanceof Element && target.closest(interactiveSelector) !== null;
+}
+
 const toneClasses: Record<
   ArchetypeTone,
   {
@@ -121,7 +137,9 @@ export function ArchetypeAnalysisScreen({
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Enter') onComplete();
+      if (event.key === 'Enter' && !shouldIgnoreGlobalEnter(event.target)) {
+        onComplete();
+      }
     };
 
     window.addEventListener("keydown", onKeyDown);
@@ -131,14 +149,14 @@ export function ArchetypeAnalysisScreen({
   return (
     <div className="flex size-full flex-col items-center justify-center overflow-y-auto px-[24px] py-[56px]">
       <div className="flex w-full max-w-[908px] flex-col items-center gap-[32px] md:gap-[39px]">
-        <motion.p
+        <motion.h1
           className="max-w-full text-center font-manrope text-[20px] font-semibold leading-[normal] tracking-[0] text-white/90 md:text-[24.5px]"
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
         >
           Based off your entries, you fall into the following user archetype
-        </motion.p>
+        </motion.h1>
 
         <div className="grid w-full grid-cols-1 justify-items-center gap-[24px] md:grid-cols-3 md:items-start md:gap-[18px] lg:gap-[29px]">
           {archetypes.map((archetype) => (
