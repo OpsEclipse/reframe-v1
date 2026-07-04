@@ -1,7 +1,15 @@
 import type { EntryReferenceWithContent } from "@/lib/entries/content";
+import {
+  getReflectionToneInstruction,
+  type ReflectionTone,
+} from "@/lib/reflections/tone";
 
 export const MAX_PRIMARY_ENTRY_CHARS = 6000;
 export const MAX_RELATED_ENTRY_CHARS = 2500;
+
+export function buildReflectionDate(now = new Date()): string {
+  return now.toISOString().slice(0, 10);
+}
 
 export function buildReflectionResponseSchema(allowedEntryIds: string[]) {
   const entryIdSchema =
@@ -73,29 +81,35 @@ export function buildReflectionResponseSchema(allowedEntryIds: string[]) {
   } as const;
 }
 
-export function buildReflectionInstructions(): string {
-  return [
-    "Talk like an old friend.",
-    "Do not sound clinical.",
-    "Do not therapize the user.",
-    "Do not summarize every point.",
-    "Do not mirror the user's thoughts with headings.",
-    "Make connections the user may not see.",
-    "Comfort, validate, and challenge.",
-    "Be casual, but do not say yo.",
-    "Sound close to the user's tone, without copying it.",
-    "Use 3 to 10 narrative blocks.",
-    "Use entry references only as entry_reference blocks.",
-    "The quote field must contain only exact entry text, never your reflection.",
-    "Put your reflection about that quote in the text field.",
-    "Let the narrative decide where entry_reference blocks appear.",
-    "If an entry was excerpted for length, only quote from the visible excerpt.",
-    "End with exactly one open-ended writing prompt.",
-    "The writing prompt should feel spacious, personal, and specific to the reflection.",
-    "Avoid narrow yes/no questions or generic advice prompts.",
-    "A good writing prompt can sound like: If the version of you from February 2025 could see today's entries, what would he admit he was wrong about?",
-    "Return only JSON that matches the supplied schema.",
-  ].join("\n");
+export function buildReflectionInstructions({
+  tone = "default",
+}: {
+  tone?: ReflectionTone;
+} = {}): string {
+  const baseInstructions = `below is my journal entry. wyt? talk through it with me like a friend. don't therpaize me and give me a whole breakdown, don't repeat my thoughts with headings. really take all of this, and tell me back stuff truly as if you're an old homie.
+
+Keep it casual, dont say yo, help me make new connections i don't see, comfort, validate, challenge, all of it. dont be afraid to say a lot. format with markdown headings if needed.
+
+do not just go through every single thing i say, and say it back to me. you need to proccess everythikng is say, make connections i don't see it, and deliver it all back to me as a story that makes me feel what you think i wanna feel. thats what the best therapists do.
+
+ideally, you're style/tone should sound like the user themselves. it's as if the user is hearing their own tone but it should still feel different, because you have different things to say and don't just repeat back they say.
+
+else, start by saying, "hey, thanks for showing me this. my thoughts:"
+
+my entry:
+
+optional relevant past entries:
+
+The main journal entry is the anchor. Treat the optional relevant past entries as context only. Use one, a few, or none of them, depending on what genuinely helps the reflection. Do not force every past entry into the response. Keep the reflection tight but not thin: say what matters, make the connections that feel alive, and do not stretch it just to use more context.
+
+Dates matter. Use reflection_date as today. When saying how long ago an entry was, calculate from reflection_date and that entry's entry_date. If you are not sure, use the exact month and year instead of guessing a relative phrase.
+
+Return only JSON that matches the supplied schema.`;
+  const toneInstruction = getReflectionToneInstruction(tone);
+
+  return toneInstruction
+    ? `${baseInstructions}\n\n${toneInstruction}`
+    : baseInstructions;
 }
 
 function truncateEntryText(text: string, maxChars: number): string {
@@ -117,9 +131,11 @@ function formatEntry(entry: EntryReferenceWithContent, maxChars: number): string
 }
 
 export function buildReflectionInput({
+  reflectionDate = buildReflectionDate(),
   primaryEntry,
   relatedEntries,
 }: {
+  reflectionDate?: string;
   primaryEntry: EntryReferenceWithContent;
   relatedEntries: EntryReferenceWithContent[];
 }): string {
@@ -131,10 +147,12 @@ export function buildReflectionInput({
       : "No related entries were found.";
 
   return [
+    `reflection_date: ${reflectionDate}`,
+    "",
     "Primary entry:",
     formatEntry(primaryEntry, MAX_PRIMARY_ENTRY_CHARS),
     "",
-    "Related entries:",
+    "Optional relevant past entries:",
     relatedEntryText,
   ].join("\n");
 }

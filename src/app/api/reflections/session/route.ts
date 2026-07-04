@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getIngestionActor } from "@/lib/ingestion/auth";
 import { createReflectionSession } from "@/lib/reflections/session";
+import { normalizeReflectionTone } from "@/lib/reflections/tone";
 
 export const runtime = "nodejs";
 
@@ -11,8 +12,22 @@ function isUnauthorizedError(error: unknown): boolean {
   );
 }
 
-export async function POST() {
+async function readRequestBody(request: Request): Promise<unknown> {
   try {
+    return await request.json();
+  } catch {
+    return null;
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const body = await readRequestBody(request);
+    const tone = normalizeReflectionTone(
+      typeof body === "object" && body !== null && "tone" in body
+        ? body.tone
+        : null,
+    );
     const actor = await getIngestionActor();
     if (!actor) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
@@ -22,6 +37,7 @@ export async function POST() {
       supabase: actor.supabase,
       userId: actor.user.id,
       clientId: actor.clientId,
+      tone,
     });
 
     return NextResponse.json({

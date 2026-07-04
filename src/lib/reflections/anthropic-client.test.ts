@@ -42,6 +42,7 @@ async function importAnthropicClient() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.useRealTimers();
   process.env.ANTHROPIC_API_KEY = "anthropic-key";
   delete process.env.ANTHROPIC_REFLECTION_MODEL;
 
@@ -78,6 +79,29 @@ beforeEach(() => {
 });
 
 describe("generateReflectionResponse", () => {
+  it("sends today's date so Claude can calculate relative entry ages", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-27T12:00:00Z"));
+    const { generateReflectionResponse } = await importAnthropicClient();
+
+    await generateReflectionResponse({
+      primaryEntry,
+      relatedEntries: [relatedEntry],
+    });
+
+    expect(clientMocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        messages: [
+          expect.objectContaining({
+            content: expect.stringContaining("reflection_date: 2026-06-27"),
+          }),
+        ],
+      }),
+    );
+
+    vi.useRealTimers();
+  });
+
   it("requests a Claude Sonnet JSON response", async () => {
     const { generateReflectionResponse } = await importAnthropicClient();
 
@@ -112,6 +136,22 @@ describe("generateReflectionResponse", () => {
     );
     expect(result.primary_entry_id).toBe("entry-primary");
     expect(result.blocks).toHaveLength(3);
+  });
+
+  it("sends selected tone guidance in the system prompt", async () => {
+    const { generateReflectionResponse } = await importAnthropicClient();
+
+    await generateReflectionResponse({
+      primaryEntry,
+      relatedEntries: [relatedEntry],
+      tone: "more_practical",
+    });
+
+    expect(clientMocks.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        system: expect.stringContaining("Be more practical than usual"),
+      }),
+    );
   });
 
   it("uses an env override for the Claude reflection model", async () => {

@@ -13,6 +13,7 @@ import {
   getReflectionModel,
 } from "@/lib/reflections/anthropic-client";
 import { searchRelatedEntriesByVectorId } from "@/lib/reflections/pinecone-search";
+import type { ReflectionTone } from "@/lib/reflections/tone";
 import type { ReflectionResponse } from "@/lib/reflections/types";
 
 interface IndexedEntryRow {
@@ -150,6 +151,7 @@ export async function createReflectionSession(params: {
   supabase: SupabaseClient;
   userId: string;
   clientId: string;
+  tone?: ReflectionTone;
 }): Promise<ReflectionSessionResult> {
   const { count, error: countError } = await params.supabase
     .from("entries")
@@ -252,6 +254,7 @@ export async function createReflectionSession(params: {
   const reflection = await generateReflectionResponse({
     primaryEntry,
     relatedEntries,
+    tone: params.tone,
   });
 
   const { data: sessionRows, error: insertError } = await params.supabase

@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation';
 import App from './App';
-import { SettingsMenu } from './components/SettingsMenu';
 import { createClient } from '@/lib/supabase/server';
 import { getUserDisplayName } from '@/lib/profile/display-name';
 
@@ -27,12 +26,5 @@ export default async function HomePage() {
     metadata: user.user_metadata,
   });
 
-  return (
-    <div className="relative">
-      <div className="absolute right-8 top-8 z-20">
-        <SettingsMenu email={user.email ?? null} />
-      </div>
-      <App userName={userDisplayName} />
-    </div>
-  );
+  return <App userName={userDisplayName} userEmail={user.email ?? null} />;
 }

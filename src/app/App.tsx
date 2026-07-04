@@ -16,6 +16,12 @@ import { ReflectionPromptScreen } from './components/ReflectionPromptScreen';
 import { WritingScreen } from './components/WritingScreen';
 import { CompletedWritingScreen } from './components/CompletedWritingScreen';
 import { PostReflectionActivityScreen } from './components/PostReflectionActivityScreen';
+import { SettingsMenu } from './components/SettingsMenu';
+import {
+	DEFAULT_REFLECTION_TONE,
+	normalizeReflectionTone,
+	type ReflectionTone,
+} from '@/lib/reflections/tone';
 
 type Screen =
 	| 'greeting'
@@ -70,9 +76,9 @@ interface ReflectionSessionResponse {
 	reflection: ActiveReflectionSession['reflection'];
 }
 
-
 const WRITE_PROMPT_TEXT = "What's on your mind today?";
 const GREETING_HOLD_MS = 2500;
+const REFLECTION_TONE_STORAGE_KEY = 'reframe.reflectionTone';
 
 function getGreeting(hour: number): string {
 	if (hour < 12) return 'Good morning';
@@ -96,11 +102,19 @@ function getCurrentTime(now: Date): string {
 	});
 }
 
-export default function App({ userName }: { userName: string }) {
+export default function App({
+	userName,
+	userEmail,
+}: {
+	userName: string;
+	userEmail: string | null;
+}) {
 	const [screen, setScreen] = useState<Screen>('greeting');
 	const [writtenText, setWrittenText] = useState('');
 	const [activeReflection, setActiveReflection] =
 		useState<ActiveReflectionSession | null>(null);
+	const [reflectionTone, setReflectionTone] =
+		useState<ReflectionTone>(DEFAULT_REFLECTION_TONE);
 	const [reflectionError, setReflectionError] = useState<
 		string | null
 	>(null);
@@ -133,6 +147,8 @@ export default function App({ userName }: { userName: string }) {
 		try {
 			const response = await fetch('/api/reflections/session', {
 				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ tone: reflectionTone }),
 			});
 			const data =
 				(await response.json()) as Partial<ReflectionSessionResponse> & {
@@ -160,6 +176,11 @@ export default function App({ userName }: { userName: string }) {
 					: 'Unable to start a reflection session.',
 			);
 		}
+	}, [reflectionTone]);
+
+	const handleReflectionToneChange = useCallback((tone: ReflectionTone) => {
+		setReflectionTone(tone);
+		localStorage.setItem(REFLECTION_TONE_STORAGE_KEY, tone);
 	}, []);
 
 	const handleSelectReflect = useCallback(
@@ -285,6 +306,14 @@ export default function App({ userName }: { userName: string }) {
 			return () => clearTimeout(timer);
 		}
 	}, [screen]);
+
+	useEffect(() => {
+		setReflectionTone(
+			normalizeReflectionTone(
+				localStorage.getItem(REFLECTION_TONE_STORAGE_KEY),
+			),
+		);
+	}, []);
 
 	const gradientTo =
 		screen === 'complete'
@@ -447,28 +476,37 @@ export default function App({ userName }: { userName: string }) {
 	}
 
 	return (
-		<div className="app-shell">
-			<div
-				className="app-stage"
-				style={{
-					background: `linear-gradient(to bottom, var(--app-stage-gradient-start), ${gradientTo})`,
-				}}
-			>
-				<div className="app-stage-content">
-					<AnimatePresence mode="wait">
-						<div
-							key={screen}
-							className="size-full"
-						>
-							{screenNode}
-						</div>
-					</AnimatePresence>
-				</div>
-				<div className="app-stage-shadow" />
-				<div
-					aria-hidden="true"
-					className="app-stage-border"
+		<div className="relative">
+			<div className="absolute right-8 top-8 z-20">
+				<SettingsMenu
+					email={userEmail}
+					reflectionTone={reflectionTone}
+					onReflectionToneChange={handleReflectionToneChange}
 				/>
+			</div>
+			<div className="app-shell">
+				<div
+					className="app-stage"
+					style={{
+						background: `linear-gradient(to bottom, var(--app-stage-gradient-start), ${gradientTo})`,
+					}}
+				>
+					<div className="app-stage-content">
+						<AnimatePresence mode="wait">
+							<div
+								key={screen}
+								className="size-full"
+							>
+								{screenNode}
+							</div>
+						</AnimatePresence>
+					</div>
+					<div className="app-stage-shadow" />
+					<div
+						aria-hidden="true"
+						className="app-stage-border"
+					/>
+				</div>
 			</div>
 		</div>
 	);

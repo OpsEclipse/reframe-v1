@@ -11,6 +11,7 @@ import {
   parseReflectionResponse,
   type ReflectionResponse,
 } from "@/lib/reflections/types";
+import type { ReflectionTone } from "@/lib/reflections/tone";
 
 const DEFAULT_REFLECTION_MODEL = "claude-sonnet-4-6";
 const MAX_REFLECTION_OUTPUT_TOKENS = 4096;
@@ -50,6 +51,7 @@ function extractTextContent(response: Message): string | null {
 export async function generateReflectionResponse(params: {
   primaryEntry: EntryReferenceWithContent;
   relatedEntries: EntryReferenceWithContent[];
+  tone?: ReflectionTone;
 }): Promise<ReflectionResponse> {
   const allowedEntryIds = new Set([
     params.primaryEntry.entry_id,
@@ -66,7 +68,7 @@ export async function generateReflectionResponse(params: {
     model: getReflectionModel(),
     max_tokens: MAX_REFLECTION_OUTPUT_TOKENS,
     stream: false,
-    system: buildReflectionInstructions(),
+    system: buildReflectionInstructions({ tone: params.tone }),
     messages: [
       {
         role: "user",
