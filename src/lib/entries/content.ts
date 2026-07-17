@@ -11,29 +11,6 @@ export interface EntryReferenceWithContent {
   content: ExtractedEntry;
 }
 
-async function bodyToString(body: unknown): Promise<string> {
-  if (!body) return "";
-
-  const transformable = body as { transformToString?: () => Promise<string> };
-  if (typeof transformable.transformToString === "function") {
-    return transformable.transformToString();
-  }
-
-  if (typeof body === "string") return body;
-  if (body instanceof Uint8Array) return Buffer.from(body).toString("utf8");
-
-  const iterable = body as AsyncIterable<Uint8Array | string>;
-  if (typeof iterable[Symbol.asyncIterator] === "function") {
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of iterable) {
-      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
-    }
-    return Buffer.concat(chunks).toString("utf8");
-  }
-
-  throw new Error("Unsupported S3 body format.");
-}
-
 function isExtractedEntry(value: unknown): value is ExtractedEntry {
   if (!value || typeof value !== "object") return false;
   const entry = value as ExtractedEntry;
@@ -94,6 +71,6 @@ export async function readEntryContentFromS3(
     }),
   );
 
-  const raw = await bodyToString(object.Body);
+  const raw = await object.Body?.transformToString() ?? "";
   return normalizeEntryRawContent(raw, fallbackSourceFile);
 }

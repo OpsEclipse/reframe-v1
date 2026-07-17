@@ -87,16 +87,6 @@ export async function upsertPineconeVector(
 ): Promise<void> {
   const indexName = getRequiredEnv("PINECONE_INDEX_NAME");
   const index = getPineconeClient().index(indexName);
-  const logDetails = {
-    indexName,
-    namespace: vector.namespace,
-    vectorId: vector.id,
-    entryId: vector.metadata.entry_id,
-    dimensions: vector.values.length,
-  };
-
-  console.log("[entry-embeddings] pinecone upsert starting", logDetails);
-
   try {
     await index.namespace(vector.namespace).upsert({
       records: [
@@ -109,13 +99,15 @@ export async function upsertPineconeVector(
     });
   } catch (error) {
     console.error("[entry-embeddings] pinecone upsert failed", {
-      ...logDetails,
+      indexName,
+      namespace: vector.namespace,
+      vectorId: vector.id,
+      entryId: vector.metadata.entry_id,
+      dimensions: vector.values.length,
       message: error instanceof Error ? error.message : "Unknown Pinecone error.",
     });
     throw error;
   }
-
-  console.log("[entry-embeddings] pinecone upsert completed", logDetails);
 }
 
 export async function deletePineconeEntryVector(params: {
@@ -129,21 +121,9 @@ export async function deletePineconeEntryVector(params: {
   );
   const index = getPineconeClient().index(indexName);
 
-  console.log("[entry-embeddings] pinecone delete starting", {
-    indexName,
-    namespace,
-    vectorId: params.vectorId,
-  });
-
   await index.deleteOne({
     id: params.vectorId,
     namespace,
-  });
-
-  console.log("[entry-embeddings] pinecone delete completed", {
-    indexName,
-    namespace,
-    vectorId: params.vectorId,
   });
 }
 
@@ -249,12 +229,36 @@ export async function markSupabaseEntryEmbeddingStatus(
   }
 }
 
+export async function claimSupabaseEntryEmbedding(
+  supabase: SupabaseClient,
+  record: EntryEmbeddingRecord,
+): Promise<boolean> {
+  // ponytail: claims do not expire; add fenced lease tokens with a durable worker for automatic crash recovery.
+  const { data, error } = await supabase
+    .from("entries")
+    .update({ embedding_status: "indexing" })
+    .eq("user_id", record.userId)
+    .eq("entry_id", record.entryId)
+    .in("embedding_status", ["pending", "failed"])
+    .select("entry_id");
+
+  if (error) {
+    throw new Error(`Failed to claim entry embedding: ${error.message}`, {
+      cause: error,
+    });
+  }
+
+  return Boolean(data?.length);
+}
+
 export async function indexEntriesWithDefaultClients(params: {
   supabase: SupabaseClient;
   records: EntryEmbeddingRecord[];
 }) {
   return indexEntryEmbeddings(
     {
+      claimEntryEmbedding: (record) =>
+        claimSupabaseEntryEmbedding(params.supabase, record),
       createEmbedding: createOpenAIEmbedding,
       upsertVector: upsertPineconeVector,
       markEntryEmbeddingStatus: (update) =>

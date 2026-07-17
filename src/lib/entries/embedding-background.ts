@@ -24,24 +24,10 @@ export function scheduleEntryEmbeddingIndexing({
   logError = console.error,
 }: ScheduleEntryEmbeddingIndexingParams): void {
   if (records.length === 0) {
-    console.log("[entry-embeddings] no records queued for indexing", {
-      ...context,
-    });
     return;
   }
 
-  console.log("[entry-embeddings] scheduling background indexing", {
-    ...context,
-    records: records.length,
-    entryIds: records.slice(0, 10).map((record) => record.entryId),
-  });
-
   schedule(async () => {
-    console.log("[entry-embeddings] background indexing started", {
-      ...context,
-      records: records.length,
-    });
-
     try {
       const results = await indexEntries({ supabase, records });
       console.log("[entry-embeddings] background indexing completed", {

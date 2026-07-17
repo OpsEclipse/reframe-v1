@@ -67,7 +67,9 @@ export function groupArchiveEntries(
         year,
         sortTime: parsedDate.getTime(),
       };
-      datedGroups.set(year, [...(datedGroups.get(year) ?? []), viewModel]);
+      const group = datedGroups.get(year);
+      if (group) group.push(viewModel);
+      else datedGroups.set(year, [viewModel]);
     } else {
       undated.push({
         ...entry,

@@ -161,7 +161,6 @@ describe("upsertPineconeVector", () => {
   it("sends the expected namespaced Pinecone upsert payload", async () => {
     setBaseEnv();
     clientMocks.pineconeUpsert.mockResolvedValue(undefined);
-    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const { upsertPineconeVector } = await importEmbeddingClients();
 
     await upsertPineconeVector({
@@ -185,33 +184,12 @@ describe("upsertPineconeVector", () => {
         },
       ],
     });
-    expect(consoleLog).toHaveBeenCalledWith(
-      "[entry-embeddings] pinecone upsert starting",
-      {
-        indexName: "entries-index",
-        namespace: "user:user-123",
-        vectorId: "entry:entry-abc",
-        entryId: "entry-abc",
-        dimensions: 3,
-      },
-    );
-    expect(consoleLog).toHaveBeenCalledWith(
-      "[entry-embeddings] pinecone upsert completed",
-      {
-        indexName: "entries-index",
-        namespace: "user:user-123",
-        vectorId: "entry:entry-abc",
-        entryId: "entry-abc",
-        dimensions: 3,
-      },
-    );
   });
 
   it("logs Pinecone upsert failures before rethrowing", async () => {
     setBaseEnv();
     const pineconeError = new Error("index not found");
     clientMocks.pineconeUpsert.mockRejectedValue(pineconeError);
-    const consoleLog = vi.spyOn(console, "log").mockImplementation(() => undefined);
     const consoleError = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
@@ -226,16 +204,6 @@ describe("upsertPineconeVector", () => {
       }),
     ).rejects.toBe(pineconeError);
 
-    expect(consoleLog).toHaveBeenCalledWith(
-      "[entry-embeddings] pinecone upsert starting",
-      {
-        indexName: "entries-index",
-        namespace: "user:user-123",
-        vectorId: "entry:entry-abc",
-        entryId: "entry-abc",
-        dimensions: 3,
-      },
-    );
     expect(consoleError).toHaveBeenCalledWith(
       "[entry-embeddings] pinecone upsert failed",
       {
@@ -447,5 +415,54 @@ describe("markSupabaseEntryEmbeddingStatus", () => {
       );
       expect((error as Error).cause).toBe(supabaseError);
     }
+  });
+});
+
+describe("claimSupabaseEntryEmbedding", () => {
+  it("atomically moves an available entry to indexing", async () => {
+    const select = vi.fn(async () => ({ data: [{ entry_id: "entry-abc" }], error: null }));
+    const inStatuses = vi.fn(() => ({ select }));
+    const eqEntryId = vi.fn(() => ({ in: inStatuses }));
+    const eqUserId = vi.fn(() => ({ eq: eqEntryId }));
+    const update = vi.fn(() => ({ eq: eqUserId }));
+    const supabase = {
+      from: vi.fn(() => ({ update })),
+    } as unknown as SupabaseClient;
+    const { claimSupabaseEntryEmbedding } = await importEmbeddingClients();
+
+    await expect(claimSupabaseEntryEmbedding(supabase, {
+      userId: "user-123",
+      clientId: "client-456",
+      entryId: "entry-abc",
+      s3Key: "entries/user-123/entry-abc.json",
+      sourceFile: null,
+      entryDate: null,
+      entryText: "Journal text",
+    })).resolves.toBe(true);
+
+    expect(update).toHaveBeenCalledWith({ embedding_status: "indexing" });
+    expect(inStatuses).toHaveBeenCalledWith("embedding_status", ["pending", "failed"]);
+  });
+
+  it("returns false when another job already holds the claim", async () => {
+    const select = vi.fn(async () => ({ data: [], error: null }));
+    const inStatuses = vi.fn(() => ({ select }));
+    const eqEntryId = vi.fn(() => ({ in: inStatuses }));
+    const eqUserId = vi.fn(() => ({ eq: eqEntryId }));
+    const update = vi.fn(() => ({ eq: eqUserId }));
+    const supabase = {
+      from: vi.fn(() => ({ update })),
+    } as unknown as SupabaseClient;
+    const { claimSupabaseEntryEmbedding } = await importEmbeddingClients();
+
+    await expect(claimSupabaseEntryEmbedding(supabase, {
+      userId: "user-123",
+      clientId: "client-456",
+      entryId: "entry-abc",
+      s3Key: "entries/user-123/entry-abc.json",
+      sourceFile: null,
+      entryDate: null,
+      entryText: "Journal text",
+    })).resolves.toBe(false);
   });
 });

@@ -3,7 +3,8 @@ import { getIngestionActor } from "@/lib/ingestion/auth";
 import {
   computeTotals,
   deriveStatusFromFiles,
-  getManifest,
+  getManifestWithEtag,
+  isManifestWriteConflict,
   putManifest,
   withDerivedFileStatuses,
   withManifestTimestamp,
@@ -27,10 +28,11 @@ export async function GET(
       return NextResponse.json({ error: "Invalid ingestionId." }, { status: 400 });
     }
 
-    const manifest = await getManifest(actor.user.id, ingestionId);
-    if (!manifest) {
+    const storedManifest = await getManifestWithEtag(actor.user.id, ingestionId);
+    if (!storedManifest) {
       return NextResponse.json({ error: "Ingestion not found." }, { status: 404 });
     }
+    const { manifest, etag } = storedManifest;
 
     if (manifest.userId !== actor.user.id) {
       return NextResponse.json({ error: "Ingestion not found." }, { status: 404 });
@@ -52,7 +54,11 @@ export async function GET(
         status,
         files: normalizedFiles,
       });
-      await putManifest(responseManifest);
+      if (etag) {
+        await putManifest(responseManifest, { ifMatch: etag }).catch((error) => {
+          if (!isManifestWriteConflict(error)) throw error;
+        });
+      }
     }
 
     return NextResponse.json({

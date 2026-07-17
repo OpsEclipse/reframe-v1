@@ -1,7 +1,7 @@
 import { InvokeCommand } from "@aws-sdk/client-lambda";
 import { NextRequest, NextResponse } from "next/server";
 import { getIngestionBucket, getLambdaClient, getStarterLambdaName } from "@/lib/aws/clients";
-import { getIngestionActor } from "@/lib/ingestion/auth";
+import { getIngestionActor, getPrimaryClientId } from "@/lib/ingestion/auth";
 import {
   createInitialManifest,
   getManifest,
@@ -58,7 +58,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized." }, { status: 401 });
     }
     const userId = actor.user.id;
-    const clientId = actor.clientId;
+    const clientId = await getPrimaryClientId(actor);
 
     const body = (await request.json()) as SubmitRequestBody;
     const ingestionId = body?.ingestionId;

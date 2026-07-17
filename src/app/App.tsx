@@ -7,22 +7,30 @@ import {
 	type ReactNode,
 } from 'react';
 import { AnimatePresence } from 'motion/react';
+import dynamic from 'next/dynamic';
 import { GreetingScreen } from './components/GreetingScreen';
 import { GratitudeScreen } from './components/GratitudeScreen';
 import { ActivityScreen } from './components/ActivityScreen';
 import { JournalEntryScreen } from './components/JournalEntryScreen';
-import { ReflectionAnalysisScreen } from './components/ReflectionAnalysisScreen';
-import { ArchetypeAnalysisScreen } from './components/ArchetypeAnalysisScreen';
 import { ReflectionPromptScreen } from './components/ReflectionPromptScreen';
 import { WritingScreen } from './components/WritingScreen';
 import { CompletedWritingScreen } from './components/CompletedWritingScreen';
-import { PostReflectionActivityScreen } from './components/PostReflectionActivityScreen';
 import { SettingsMenu } from './components/SettingsMenu';
 import {
 	DEFAULT_REFLECTION_TONE,
 	normalizeReflectionTone,
 	type ReflectionTone,
 } from '@/lib/reflections/tone';
+
+const ReflectionAnalysisScreen = dynamic(() =>
+	import('./components/ReflectionAnalysisScreen').then((module) => module.ReflectionAnalysisScreen),
+);
+const ArchetypeAnalysisScreen = dynamic(() =>
+	import('./components/ArchetypeAnalysisScreen').then((module) => module.ArchetypeAnalysisScreen),
+);
+const PostReflectionActivityScreen = dynamic(() =>
+	import('./components/PostReflectionActivityScreen').then((module) => module.PostReflectionActivityScreen),
+);
 
 type Screen =
 	| 'greeting'

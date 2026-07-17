@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getIngestionActor } from "@/lib/ingestion/auth";
+import { getIngestionActor, getPrimaryClientId } from "@/lib/ingestion/auth";
 import { saveReflectionEntry } from "@/lib/reflections/session";
 
 export const runtime = "nodejs";
@@ -46,7 +46,7 @@ export async function POST(
     const result = await saveReflectionEntry({
       supabase: actor.supabase,
       userId: actor.user.id,
-      clientId: actor.clientId,
+      clientId: await getPrimaryClientId(actor),
       sessionId,
       entryText: body.entry_text,
     });

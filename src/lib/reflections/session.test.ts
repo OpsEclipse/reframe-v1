@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   buildRandomIndexedEntryOffset,
@@ -9,7 +10,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   s3Send: vi.fn(),
-  indexEntriesWithDefaultClients: vi.fn(),
+  scheduleEntryEmbeddingIndexing: vi.fn(),
 }));
 
 vi.mock("@/lib/aws/clients", () => ({
@@ -17,8 +18,8 @@ vi.mock("@/lib/aws/clients", () => ({
   getS3Client: () => ({ send: mocks.s3Send }),
 }));
 
-vi.mock("@/lib/entries/embedding-clients", () => ({
-  indexEntriesWithDefaultClients: mocks.indexEntriesWithDefaultClients,
+vi.mock("@/lib/entries/embedding-background", () => ({
+  scheduleEntryEmbeddingIndexing: mocks.scheduleEntryEmbeddingIndexing,
 }));
 
 function createSupabaseForSave(options: {
@@ -102,6 +103,11 @@ beforeEach(() => {
 });
 
 describe("reflection direct save helpers", () => {
+  it("hydrates related entries in parallel", () => {
+    const source = readFileSync(new URL("./session.ts", import.meta.url), "utf8");
+    expect(source).toContain("Promise.all(matchesToHydrate.map");
+  });
+
   it("builds a stable reflection entry id prefix", () => {
     expect(
       buildReflectionEntryId("2026-06-03T12:00:00.000Z", "fixed-random-id"),
@@ -146,9 +152,6 @@ describe("reflection direct save helpers", () => {
 describe("saveReflectionEntry", () => {
   it("claims the session before writing the entry", async () => {
     mocks.s3Send.mockResolvedValue({});
-    mocks.indexEntriesWithDefaultClients.mockResolvedValue([
-      { status: "indexed", vectorId: "entry:reflection-123" },
-    ]);
     const { supabase, spies } = createSupabaseForSave({
       claimRows: [
         {
@@ -179,7 +182,17 @@ describe("saveReflectionEntry", () => {
         embedding_status: "pending",
       }),
     );
-    expect(result.embedding_status).toBe("indexed");
+    expect(result.embedding_status).toBe("pending");
+    expect(mocks.scheduleEntryEmbeddingIndexing).toHaveBeenCalledWith(
+      expect.objectContaining({
+        records: [
+          expect.objectContaining({
+            entryId: result.entry_id,
+            entryText: "Fresh thought.",
+          }),
+        ],
+      }),
+    );
   });
 
   it("rejects an already saved session without writing to S3", async () => {

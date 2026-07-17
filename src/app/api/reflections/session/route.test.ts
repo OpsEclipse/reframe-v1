@@ -2,11 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mocks = vi.hoisted(() => ({
   getIngestionActor: vi.fn(),
+  getPrimaryClientId: vi.fn(),
   createReflectionSession: vi.fn(),
 }));
 
 vi.mock("@/lib/ingestion/auth", () => ({
   getIngestionActor: mocks.getIngestionActor,
+  getPrimaryClientId: mocks.getPrimaryClientId,
 }));
 
 vi.mock("@/lib/reflections/session", () => ({
@@ -34,9 +36,9 @@ beforeEach(() => {
   vi.clearAllMocks();
   mocks.getIngestionActor.mockResolvedValue({
     user: { id: "user-123" },
-    clientId: "client-456",
     supabase: { from: vi.fn() },
   });
+  mocks.getPrimaryClientId.mockResolvedValue("client-456");
   mocks.createReflectionSession.mockResolvedValue(buildSession());
 });
 

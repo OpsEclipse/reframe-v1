@@ -3,9 +3,9 @@ import { motion, AnimatePresence } from 'motion/react';
 import {
 	EnterIcon,
 	FadeScreen,
-	DockWithImporter,
 	ScreenHeader,
 } from './shared/screen-primitives';
+import { DockWithImporter } from './shared/dock-with-importer';
 
 interface WritingScreenProps {
 	currentDate: string;

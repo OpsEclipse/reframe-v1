@@ -4,10 +4,17 @@ import { createHash } from "node:crypto";
 import { getIngestionBucket, getS3Client } from "@/lib/aws/clients";
 import { scheduleEntryEmbeddingIndexing } from "@/lib/entries/embedding-background";
 import type { EntryEmbeddingRecord } from "@/lib/entries/embedding-index";
-import { getIngestionActor, type IngestionActor } from "@/lib/ingestion/auth";
+import { getIngestionActor, getPrimaryClientId, type IngestionActor } from "@/lib/ingestion/auth";
 import { normalizeEntryDate } from "@/lib/ingestion/dates";
-import { deriveStatusFromFiles, getManifest, withDerivedFileStatuses } from "@/lib/ingestion/manifest";
-import type { ExtractedEntry, IngestionStatus } from "@/lib/ingestion/types";
+import {
+  deriveStatusFromFiles,
+  getManifestWithEtag,
+  isManifestWriteConflict,
+  putManifest,
+  withDerivedFileStatuses,
+  withManifestTimestamp,
+} from "@/lib/ingestion/manifest";
+import type { ExtractedEntry, IngestionManifest, IngestionStatus } from "@/lib/ingestion/types";
 import { isValidIngestionId } from "@/lib/ingestion/validation";
 
 const TERMINAL_STATUSES: IngestionStatus[] = ["COMPLETED", "PARTIAL_FAILED", "FAILED"];
@@ -15,6 +22,7 @@ const UNSAFE_ENTRY_ID_CHARS = /[^a-zA-Z0-9._-]/g;
 const FLAT_ENTRY_KEY_PATTERN = /^entries\/[0-9a-fA-F-]{36}\/[^/]+\.json$/;
 const LEGACY_ENTRY_KEY_PATTERN = /^entries\/[0-9a-fA-F-]{36}\/[0-9a-fA-F-]{36}\/[^/]+\.json$/;
 const INGESTION_DEBUG = process.env.INGESTION_DEBUG === "1";
+const FINALIZATION_CLAIM_TIMEOUT_MS = 10 * 60 * 1000;
 const SUPABASE_PROJECT_REF = (() => {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   if (!url) {
@@ -36,40 +44,6 @@ interface EntryEmbeddingStatusRow {
 
 function isValidEntryKey(key: string): boolean {
   return FLAT_ENTRY_KEY_PATTERN.test(key) || LEGACY_ENTRY_KEY_PATTERN.test(key);
-}
-
-async function bodyToString(body: unknown): Promise<string> {
-  if (!body) {
-    return "";
-  }
-
-  const maybeTransformable = body as { transformToString?: () => Promise<string> };
-  if (typeof maybeTransformable.transformToString === "function") {
-    return maybeTransformable.transformToString();
-  }
-
-  if (typeof body === "string") {
-    return body;
-  }
-
-  if (body instanceof Uint8Array) {
-    return Buffer.from(body).toString("utf8");
-  }
-
-  const maybeAsyncIterable = body as AsyncIterable<Uint8Array | string>;
-  if (typeof maybeAsyncIterable[Symbol.asyncIterator] === "function") {
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of maybeAsyncIterable) {
-      if (typeof chunk === "string") {
-        chunks.push(Buffer.from(chunk));
-      } else {
-        chunks.push(chunk);
-      }
-    }
-    return Buffer.concat(chunks).toString("utf8");
-  }
-
-  throw new Error("Unsupported S3 body format.");
 }
 
 function isExtractedEntry(candidate: unknown): candidate is ExtractedEntry {
@@ -311,6 +285,9 @@ export async function GET(
   _request: NextRequest,
   context: { params: Promise<{ ingestionId: string }> },
 ) {
+  let claimedManifest: IngestionManifest | null = null;
+  let claimEtag: string | null = null;
+
   try {
     const actor = await getIngestionActor();
     if (!actor) {
@@ -322,10 +299,11 @@ export async function GET(
       return NextResponse.json({ error: "Invalid ingestionId." }, { status: 400 });
     }
 
-    const manifest = await getManifest(actor.user.id, ingestionId);
-    if (!manifest) {
+    const storedManifest = await getManifestWithEtag(actor.user.id, ingestionId);
+    if (!storedManifest) {
       return NextResponse.json({ error: "Ingestion not found." }, { status: 404 });
     }
+    const { manifest, etag } = storedManifest;
 
     if (manifest.userId !== actor.user.id) {
       return NextResponse.json({ error: "Ingestion not found." }, { status: 404 });
@@ -341,6 +319,55 @@ export async function GET(
         { error: "Ingestion has not reached a terminal status.", status: effectiveStatus },
         { status: 409 },
       );
+    }
+
+    if (manifest.resultsFinalizationStatus === "FINALIZED") {
+      return NextResponse.json({
+        ingestionId,
+        entryCount: manifest.resultEntryCount ?? 0,
+        referencesSynced: manifest.resultReferencesSynced ?? 0,
+        embeddingsQueued: manifest.resultEmbeddingsQueued ?? 0,
+      });
+    }
+
+    const finalizationStartedAt = Date.parse(manifest.resultsFinalizationStartedAt ?? "");
+    const hasActiveFinalizationClaim =
+      manifest.resultsFinalizationStatus === "FINALIZING" &&
+      (!Number.isFinite(finalizationStartedAt) ||
+        Date.now() - finalizationStartedAt < FINALIZATION_CLAIM_TIMEOUT_MS);
+    if (hasActiveFinalizationClaim) {
+      return NextResponse.json(
+        { error: "Ingestion results are being finalized.", status: "FINALIZING" },
+        { status: 409 },
+      );
+    }
+
+    if (!etag) {
+      throw new Error("Ingestion manifest is missing its S3 version.");
+    }
+
+    claimedManifest = withManifestTimestamp({
+      ...manifest,
+      resultsFinalizationStatus: "FINALIZING",
+      resultsFinalizationStartedAt: new Date().toISOString(),
+      resultsFinalizationError: null,
+    });
+
+    try {
+      claimEtag = await putManifest(claimedManifest, { ifMatch: etag }) ?? null;
+      if (!claimEtag) {
+        claimedManifest = null;
+        throw new Error("S3 did not return a version for the finalization claim.");
+      }
+    } catch (error) {
+      if (isManifestWriteConflict(error)) {
+        claimedManifest = null;
+        return NextResponse.json(
+          { error: "Ingestion results are being finalized.", status: "FINALIZING" },
+          { status: 409 },
+        );
+      }
+      throw error;
     }
 
     const s3 = getS3Client();
@@ -376,7 +403,7 @@ export async function GET(
           }),
         );
 
-        const raw = await bodyToString(payload.Body);
+        const raw = await payload.Body?.transformToString();
         if (!raw) {
           return {
             sourceKey: key,
@@ -444,7 +471,7 @@ export async function GET(
     const syncedReferences = await syncEntriesToDatabase({
       supabase: actor.supabase,
       userId: actor.user.id,
-      clientId: manifest.clientId || actor.clientId,
+      clientId: manifest.clientId || await getPrimaryClientId(actor),
       entryObjects: materializedEntryObjects,
     });
 
@@ -452,17 +479,6 @@ export async function GET(
       supabase: actor.supabase,
       userId: actor.user.id,
       references: syncedReferences,
-    });
-
-    console.log("[ingestion-results] embedding queue prepared", {
-      ingestionId,
-      userId: actor.user.id,
-      entriesReturned: entries.length,
-      referencesSynced: syncedReferences.length,
-      embeddingsQueued: referencesNeedingEmbedding.length,
-      entryIds: referencesNeedingEmbedding
-        .slice(0, 10)
-        .map((reference) => reference.entryId),
     });
 
     scheduleEntryEmbeddingIndexing({
@@ -474,15 +490,33 @@ export async function GET(
       },
     });
 
+    await putManifest(withManifestTimestamp({
+      ...claimedManifest,
+      resultsFinalizationStatus: "FINALIZED",
+      resultsFinalizedAt: new Date().toISOString(),
+      resultsFinalizationError: null,
+      resultEntryCount: entries.length,
+      resultReferencesSynced: syncedReferences.length,
+      resultEmbeddingsQueued: referencesNeedingEmbedding.length,
+    }), { ifMatch: claimEtag });
+    claimedManifest = null;
+    claimEtag = null;
+
     return NextResponse.json({
       ingestionId,
-      entries,
+      entryCount: entries.length,
       referencesSynced: syncedReferences.length,
       embeddingsQueued: referencesNeedingEmbedding.length,
-      entryKeys: materializedEntryObjects.map((item) => item.key),
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to fetch ingestion results.";
+    if (claimedManifest) {
+      await putManifest(withManifestTimestamp({
+        ...claimedManifest,
+        resultsFinalizationStatus: "FAILED",
+        resultsFinalizationError: message,
+      }), claimEtag ? { ifMatch: claimEtag } : {}).catch(() => undefined);
+    }
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }

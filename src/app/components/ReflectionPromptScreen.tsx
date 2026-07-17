@@ -3,9 +3,9 @@ import { motion } from 'motion/react';
 import {
 	EnterActionButton,
 	FadeScreen,
-	DockWithImporter,
 	ScreenHeader,
 } from './shared/screen-primitives';
+import { DockWithImporter } from './shared/dock-with-importer';
 
 interface ReflectionPromptScreenProps {
 	currentDate: string;

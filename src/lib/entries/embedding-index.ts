@@ -58,6 +58,7 @@ export interface PineconeVectorUpsert {
 }
 
 export interface EntryEmbeddingDependencies {
+  claimEntryEmbedding?: (record: EntryEmbeddingRecord) => Promise<boolean>;
   createEmbedding: (text: string) => Promise<number[]>;
   upsertVector: (vector: PineconeVectorUpsert) => Promise<void>;
   markEntryEmbeddingStatus: (
@@ -103,29 +104,20 @@ export async function indexEntryEmbedding(
   const vectorId = buildPineconeVectorId(record.entryId);
   let values: number[];
 
-  console.log("[entry-embeddings] marking entry embedding pending", {
-    entryId: record.entryId,
-    vectorId,
-  });
-
-  await dependencies.markEntryEmbeddingStatus({
-    userId: record.userId,
-    entryId: record.entryId,
-    status: "pending",
-  });
+  if (dependencies.claimEntryEmbedding) {
+    if (!await dependencies.claimEntryEmbedding(record)) {
+      return { status: "pending", vectorId };
+    }
+  } else {
+    await dependencies.markEntryEmbeddingStatus({
+      userId: record.userId,
+      entryId: record.entryId,
+      status: "pending",
+    });
+  }
 
   try {
-    console.log("[entry-embeddings] creating OpenAI embedding", {
-      entryId: record.entryId,
-      vectorId,
-      textLength: record.entryText.length,
-    });
     values = await dependencies.createEmbedding(record.entryText);
-    console.log("[entry-embeddings] OpenAI embedding created", {
-      entryId: record.entryId,
-      vectorId,
-      dimensions: values.length,
-    });
 
     await dependencies.upsertVector({
       namespace: buildPineconeNamespace(
@@ -137,10 +129,6 @@ export async function indexEntryEmbedding(
       metadata: buildPineconeMetadata(record),
     });
 
-    console.log("[entry-embeddings] vector upsert finished", {
-      entryId: record.entryId,
-      vectorId,
-    });
   } catch (error) {
     console.error("[entry-embeddings] entry indexing failed", {
       entryId: record.entryId,
@@ -180,21 +168,24 @@ export async function indexEntryEmbeddings(
 ): Promise<EntryEmbeddingResult[]> {
   const results: EntryEmbeddingResult[] = [];
 
-  for (const record of records) {
-    try {
-      results.push(await indexEntryEmbedding(dependencies, record));
-    } catch (error) {
-      console.error("[entry-embeddings] entry indexing threw outside retry path", {
-        entryId: record.entryId,
-        vectorId: buildPineconeVectorId(record.entryId),
-        message: error instanceof Error ? error.message : "Unknown indexing error.",
-      });
+  for (let start = 0; start < records.length; start += 4) {
+    const batch = records.slice(start, start + 4);
+    results.push(...await Promise.all(batch.map(async (record) => {
+      try {
+        return await indexEntryEmbedding(dependencies, record);
+      } catch (error) {
+        console.error("[entry-embeddings] entry indexing threw outside retry path", {
+          entryId: record.entryId,
+          vectorId: buildPineconeVectorId(record.entryId),
+          message: error instanceof Error ? error.message : "Unknown indexing error.",
+        });
 
-      results.push({
-        status: "failed",
-        vectorId: buildPineconeVectorId(record.entryId),
-      });
-    }
+        return {
+          status: "failed" as const,
+          vectorId: buildPineconeVectorId(record.entryId),
+        };
+      }
+    })));
   }
 
   return results;

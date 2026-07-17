@@ -39,6 +39,13 @@ export interface IngestionManifest {
   submittedAt: string;
   updatedAt: string;
   files: IngestionFileRecord[];
+  resultsFinalizationStatus?: "FINALIZING" | "FINALIZED" | "FAILED";
+  resultsFinalizationStartedAt?: string;
+  resultsFinalizedAt?: string;
+  resultsFinalizationError?: string | null;
+  resultEntryCount?: number;
+  resultReferencesSynced?: number;
+  resultEmbeddingsQueued?: number;
 }
 
 export interface StarterInvokePayload {
@@ -60,10 +67,4 @@ export interface ExtractedEntry {
   date: string | null;
   entry_text: string;
   source_file: string;
-}
-
-export const TERMINAL_INGESTION_STATUSES: IngestionStatus[] = ["COMPLETED", "PARTIAL_FAILED", "FAILED"];
-
-export function isTerminalIngestionStatus(status: IngestionStatus): boolean {
-  return TERMINAL_INGESTION_STATUSES.includes(status);
 }

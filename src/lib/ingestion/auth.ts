@@ -8,7 +8,6 @@ interface ClientRow {
 export interface IngestionActor {
   supabase: SupabaseClient;
   user: User;
-  clientId: string;
 }
 
 function deriveDisplayName(user: User): string {
@@ -112,11 +111,12 @@ export async function getIngestionActor(): Promise<IngestionActor | null> {
     return null;
   }
 
-  const clientId = await ensurePrimaryClient(supabase, user);
-
   return {
     supabase,
     user,
-    clientId,
   };
+}
+
+export function getPrimaryClientId(actor: IngestionActor): Promise<string> {
+  return ensurePrimaryClient(actor.supabase, actor.user);
 }

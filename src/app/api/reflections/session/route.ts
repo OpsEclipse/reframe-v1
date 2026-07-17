@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getIngestionActor } from "@/lib/ingestion/auth";
+import { getIngestionActor, getPrimaryClientId } from "@/lib/ingestion/auth";
 import { createReflectionSession } from "@/lib/reflections/session";
 import { normalizeReflectionTone } from "@/lib/reflections/tone";
 
@@ -36,7 +36,7 @@ export async function POST(request: Request) {
     const session = await createReflectionSession({
       supabase: actor.supabase,
       userId: actor.user.id,
-      clientId: actor.clientId,
+      clientId: await getPrimaryClientId(actor),
       tone,
     });
 

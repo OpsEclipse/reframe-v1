@@ -6,7 +6,7 @@ import {
   readEntryContentFromS3,
   type EntryReferenceWithContent,
 } from "@/lib/entries/content";
-import { indexEntriesWithDefaultClients } from "@/lib/entries/embedding-clients";
+import { scheduleEntryEmbeddingIndexing } from "@/lib/entries/embedding-background";
 import type { EntryEmbeddingStatus } from "@/lib/entries/embedding-index";
 import {
   generateReflectionResponse,
@@ -223,33 +223,21 @@ export async function createReflectionSession(params: {
     vectorId,
   }).catch(() => []);
 
-  const relatedEntries: EntryReferenceWithContent[] = [];
   const seenEntryIds = new Set([primaryEntry.entry_id]);
-
-  for (const match of relatedMatches) {
-    if (!match.s3Key || seenEntryIds.has(match.entryId)) {
-      continue;
-    }
-
-    const relatedEntry = await hydrateEntryRow({
+  const matchesToHydrate = relatedMatches.filter((match) => {
+    if (!match.s3Key || seenEntryIds.has(match.entryId)) return false;
+    seenEntryIds.add(match.entryId);
+    return true;
+  });
+  const relatedEntries = (await Promise.all(matchesToHydrate.map((match) =>
+    hydrateEntryRow({
       entry_id: match.entryId,
-      s3_key: match.s3Key,
+      s3_key: match.s3Key!,
       source_file: null,
       entry_date: match.entryDate,
       pinecone_vector_id: null,
-    });
-
-    if (!relatedEntry || !hasEntryText(relatedEntry)) {
-      continue;
-    }
-
-    seenEntryIds.add(relatedEntry.entry_id);
-    relatedEntries.push(relatedEntry);
-
-    if (relatedEntries.length >= 8) {
-      break;
-    }
-  }
+    }),
+  ))).filter((entry): entry is EntryReferenceWithContent => Boolean(entry && hasEntryText(entry)));
 
   const reflection = await generateReflectionResponse({
     primaryEntry,
@@ -417,40 +405,23 @@ export async function saveReflectionEntry(params: {
     throw error;
   }
 
-  let embeddingStatus: EntryEmbeddingStatus = "failed";
-
-  try {
-    const [indexResult] = await indexEntriesWithDefaultClients({
-      supabase: params.supabase,
-      records: [
-        {
-          userId: params.userId,
-          clientId: params.clientId,
-          entryId,
-          s3Key,
-          sourceFile: "reflection",
-          entryDate: date,
-          entryText: cleanText,
-        },
-      ],
-    });
-    embeddingStatus = indexResult?.status ?? "failed";
-  } catch {
-    await params.supabase
-      .from("entries")
-      .update({
-        embedding_status: "failed",
-        pinecone_vector_id: null,
-        embedded_at: null,
-      })
-      .eq("user_id", params.userId)
-      .eq("entry_id", entryId);
-    embeddingStatus = "failed";
-  }
+  scheduleEntryEmbeddingIndexing({
+    supabase: params.supabase,
+    records: [{
+      userId: params.userId,
+      clientId: params.clientId,
+      entryId,
+      s3Key,
+      sourceFile: "reflection",
+      entryDate: date,
+      entryText: cleanText,
+    }],
+    context: { userId: params.userId, entryId },
+  });
 
   return {
     entry_id: entryId,
     s3_key: s3Key,
-    embedding_status: embeddingStatus,
+    embedding_status: "pending",
   };
 }

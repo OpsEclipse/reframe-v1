@@ -20,38 +20,15 @@ function isNotFoundError(error: unknown): boolean {
   return candidate.name === "NoSuchKey" || candidate.$metadata?.httpStatusCode === 404;
 }
 
-async function bodyToString(body: unknown): Promise<string> {
-  if (!body) {
-    return "";
-  }
-
-  const maybeTransformable = body as { transformToString?: () => Promise<string> };
-  if (typeof maybeTransformable.transformToString === "function") {
-    return maybeTransformable.transformToString();
-  }
-
-  if (typeof body === "string") {
-    return body;
-  }
-
-  if (body instanceof Uint8Array) {
-    return Buffer.from(body).toString("utf8");
-  }
-
-  const maybeAsyncIterable = body as AsyncIterable<Uint8Array | string>;
-  if (typeof maybeAsyncIterable[Symbol.asyncIterator] === "function") {
-    const chunks: Uint8Array[] = [];
-    for await (const chunk of maybeAsyncIterable) {
-      if (typeof chunk === "string") {
-        chunks.push(Buffer.from(chunk));
-      } else {
-        chunks.push(chunk);
-      }
-    }
-    return Buffer.concat(chunks).toString("utf8");
-  }
-
-  throw new Error("Unsupported S3 body format.");
+export function isManifestWriteConflict(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { name?: string; $metadata?: { httpStatusCode?: number } };
+  return (
+    candidate.name === "PreconditionFailed" ||
+    candidate.name === "ConditionalRequestConflict" ||
+    candidate.$metadata?.httpStatusCode === 409 ||
+    candidate.$metadata?.httpStatusCode === 412
+  );
 }
 
 export function deriveStatusFromFiles(files: IngestionFileRecord[]): IngestionStatus {
@@ -196,6 +173,13 @@ export async function getManifest(
   userId: string,
   ingestionId: string,
 ): Promise<IngestionManifest | null> {
+  return (await getManifestWithEtag(userId, ingestionId))?.manifest ?? null;
+}
+
+export async function getManifestWithEtag(
+  userId: string,
+  ingestionId: string,
+): Promise<{ manifest: IngestionManifest; etag?: string } | null> {
   const s3 = getS3Client();
   const bucket = getIngestionBucket();
   const key = buildManifestKey(userId, ingestionId);
@@ -208,7 +192,7 @@ export async function getManifest(
       }),
     );
 
-    const payload = await bodyToString(response.Body);
+    const payload = await response.Body?.transformToString();
     if (!payload) {
       return null;
     }
@@ -218,7 +202,7 @@ export async function getManifest(
       return null;
     }
 
-    return {
+    const manifest = {
       ...parsed,
       version: 1,
       ingestionId: parsed.ingestionId ?? ingestionId,
@@ -229,6 +213,8 @@ export async function getManifest(
       updatedAt: parsed.updatedAt ?? new Date().toISOString(),
       files: Array.isArray(parsed.files) ? parsed.files : [],
     } as IngestionManifest;
+
+    return { manifest, etag: response.ETag };
   } catch (error) {
     if (isNotFoundError(error)) {
       return null;
@@ -237,19 +223,25 @@ export async function getManifest(
   }
 }
 
-export async function putManifest(manifest: IngestionManifest): Promise<void> {
+export async function putManifest(
+  manifest: IngestionManifest,
+  options: { ifMatch?: string } = {},
+): Promise<string | undefined> {
   const s3 = getS3Client();
   const bucket = getIngestionBucket();
   const key = buildManifestKey(manifest.userId, manifest.ingestionId);
 
-  await s3.send(
+  const response = await s3.send(
     new PutObjectCommand({
       Bucket: bucket,
       Key: key,
       ContentType: "application/json",
       Body: JSON.stringify(manifest),
+      IfMatch: options.ifMatch,
     }),
   );
+
+  return response.ETag;
 }
 
 export function withManifestTimestamp(manifest: IngestionManifest): IngestionManifest {

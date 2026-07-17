@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { buildEntryEmbeddingUpdatePayload } from "@/lib/entries/embedding-clients";
 import {
   buildPineconeMetadata,
@@ -115,6 +115,31 @@ describe("entry embedding helpers", () => {
 });
 
 describe("indexEntryEmbedding", () => {
+  it("skips provider work when another job owns the database claim", async () => {
+    const { dependencies, createEmbeddingInputs, statusUpdates, upserts } =
+      createDependencies({
+        claimEntryEmbedding: async () => false,
+      });
+
+    await expect(indexEntryEmbedding(dependencies, createRecord())).resolves.toEqual({
+      status: "pending",
+      vectorId: "entry:entry-abc",
+    });
+    expect(createEmbeddingInputs).toEqual([]);
+    expect(upserts).toEqual([]);
+    expect(statusUpdates).toEqual([]);
+  });
+
+  it("does not reset a claimed entry back to pending", async () => {
+    const { dependencies, statusUpdates } = createDependencies({
+      claimEntryEmbedding: async () => true,
+    });
+
+    await indexEntryEmbedding(dependencies, createRecord());
+
+    expect(statusUpdates.map((update) => update.status)).toEqual(["indexed"]);
+  });
+
   it("creates an embedding, upserts it, and marks the entry indexed", async () => {
     const record = createRecord();
     const { createEmbeddingInputs, dependencies, statusUpdates, upserts } =
@@ -254,6 +279,40 @@ describe("indexEntryEmbedding", () => {
 });
 
 describe("indexEntryEmbeddings", () => {
+  it("indexes several entries concurrently without exceeding the limit", async () => {
+    const records = Array.from({ length: 8 }, (_, index) =>
+      createRecord({
+        entryId: `entry-${index}`,
+        entryText: `Entry ${index}`,
+      }),
+    );
+    let active = 0;
+    let maxActive = 0;
+    const releases: Array<() => void> = [];
+    const { dependencies } = createDependencies({
+      createEmbedding: async () => {
+        active += 1;
+        maxActive = Math.max(maxActive, active);
+        await new Promise<void>((resolve) => releases.push(resolve));
+        active -= 1;
+        return [0.1, 0.2, 0.3];
+      },
+    });
+
+    const resultsPromise = indexEntryEmbeddings(dependencies, records);
+    await vi.waitFor(() => expect(releases).toHaveLength(4));
+    while (releases.length > 0) {
+      releases.shift()?.();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    const results = await resultsPromise;
+
+    expect(maxActive).toBe(4);
+    expect(results.map((result) => result.vectorId)).toEqual(
+      records.map((record) => `entry:${record.entryId}`),
+    );
+  });
+
   it("returns one result per record", async () => {
     const records = [
       createRecord({
@@ -381,7 +440,8 @@ describe("indexEntryEmbeddings", () => {
       "entry:entry-indexed-status-fails",
       "entry:entry-after-throw",
     ]);
-    expect(statusUpdates).toEqual([
+    expect(statusUpdates).toHaveLength(4);
+    expect(statusUpdates).toEqual(expect.arrayContaining([
       {
         userId: "user-123",
         entryId: "entry-indexed-status-fails",
@@ -406,7 +466,7 @@ describe("indexEntryEmbeddings", () => {
         pineconeVectorId: "entry:entry-after-throw",
         embeddedAt: "2026-06-03T12:00:00.000Z",
       },
-    ]);
+    ]));
   });
 });
 
